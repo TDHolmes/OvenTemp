@@ -1,3 +1,7 @@
+# Project ignores:
+
+firmware/drivers/src/projects/
+
 # --------- C gitignore ------------- #
 # Prerequisites
 *.d
