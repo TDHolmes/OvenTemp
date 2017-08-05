@@ -52,7 +52,7 @@ SET(CMAKE_ASM_FLAGS_RELEASE "${CMAKE_ASM_FLAGS_RELEASE} ${CMAKE_GENERAL_FLAGS}")
 
 # ------------------------------ C LANGUAGE FLAGS - DEBUG ------------------------------ #
 SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DDEBUG")
-SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DCPU_MKL03Z32VFK4")
+SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DCPU_MKE04Z8VFK4")
 SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DPRINTF_FLOAT_ENABLE=0")
 SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DSCANF_FLOAT_ENABLE=0")
 SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DPRINTF_ADVANCED_ENABLE=0")
@@ -68,7 +68,7 @@ SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ${CMAKE_GENERAL_FLAGS}")
 
 # ------------------------------ C LANGUAGE FLAGS - RELEASE ------------------------------ #
 SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG")
-SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DCPU_MKL03Z32VFK4")
+SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DCPU_MKE04Z8VFK4")
 SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DPRINTF_FLOAT_ENABLE=0")
 SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DSCANF_FLOAT_ENABLE=0")
 SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DPRINTF_ADVANCED_ENABLE=0")
@@ -119,51 +119,21 @@ include_directories(${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4)
 
 add_executable(motor_driver.elf
 	# user code
-	"${ProjDirPath}motor_drivers.c"
-	"${ProjDirPath}motor_drivers.h"
-	"${ProjDirPath}motor_calc.c"
-	"${ProjDirPath}motor_calc.h"
-	"${ProjDirPath}constants.h"
-	"${ProjDirPath}encoders.c"
-	"${ProjDirPath}encoders.h"
-	"${ProjDirPath}hardware.c"
-	"${ProjDirPath}hardware.h"
-	"${ProjDirPath}clock_config.c"
-	"${ProjDirPath}clock_config.h"
-	"${ProjDirPath}i2c_comms.c"
-	"${ProjDirPath}i2c_comms.h"
-	"${ProjDirPath}timer.c"
-	"${ProjDirPath}timer.h"
-	"${ProjDirPath}main.c"
-	"${ProjDirPath}main.h"
+	"${ProjDirPath}/source/i2c.c"
+	"${ProjDirPath}/source/timer.c"
+	"${ProjDirPath}/source/main.c"
 
 	# NXP drivers and system files
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/gcc/startup_MKL03Z4.S"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_port.h"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_common.h"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_common.c"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/system_MKL03Z4.c"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/system_MKL03Z4.h"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_gpio.h"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_gpio.c"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_tpm.h"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_tpm.c"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_i2c.h"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_i2c.c"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_clock.h"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_clock.c"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_lptmr.h"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_lptmr.c"
+	"${ProjDirPath}/drivers/devices/MKL03Z4/gcc/startup_MKL03Z4.S"
+	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_common.c"
+	"${ProjDirPath}/drivers/devices/MKL03Z4/system_MKL03Z4.c"
+	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_gpio.c"
+	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_tpm.c"
+	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_i2c.c"
+	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_clock.c"
+	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_lptmr.c"
 	# UART stuff...
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_lpuart.h"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_lpuart.c"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/utilities/fsl_debug_console.c"
-	"${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/utilities/fsl_debug_console.h"
-	# Other stuff that was used before, but not anymore :p
-	# "${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/pin_mux.h"
-	# "${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/pin_mux.c"
-	# "${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_smc.h"
-	# "${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers/fsl_smc.c"
+	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_lpuart.c"
 )
 
 
