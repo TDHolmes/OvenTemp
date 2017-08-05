@@ -18,7 +18,7 @@ SET(CMAKE_EXECUTABLE_LIBRARY_SUFFIX)
 
 
 # CURRENT DIRECTORY up a level
-SET(ProjDirPath ${CMAKE_CURRENT_SOURCE_DIR}/../)
+SET(ProjDirPath ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 
 # ARMGCC DIRECTORY, if null string will use environmental variables
@@ -101,68 +101,38 @@ SET(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} -Xlinker mulde
 
 
 # ------------------------------ INCLUDE DIRECTORIES ------------------------------ #
-
-include_directories(${ProjDirPath})
-
-include_directories(${ProjDirPath}MKL03Z4_drivers/CMSIS/Include)
-
-include_directories(${ProjDirPath}MKL03Z4_drivers/devices)
-
-include_directories(${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/drivers)
-
-include_directories(${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/utilities)
-
-include_directories(${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4)
+include_directories(${ProjDirPath}/include)
+include_directories(${ProjDirPath}/drivers/src)
+include_directories(${ProjDirPath}/drivers/src/cpu)
 
 
 # ------------------------------ SOURCE FILES ------------------------------ #
-
-add_executable(motor_driver.elf
+add_executable(OvenTemp.elf
 	# user code
-	"${ProjDirPath}/source/i2c.c"
-	"${ProjDirPath}/source/timer.c"
 	"${ProjDirPath}/source/main.c"
 
-	# NXP drivers and system files
-	"${ProjDirPath}/drivers/devices/MKL03Z4/gcc/startup_MKL03Z4.S"
-	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_common.c"
-	"${ProjDirPath}/drivers/devices/MKL03Z4/system_MKL03Z4.c"
-	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_gpio.c"
-	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_tpm.c"
-	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_i2c.c"
-	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_clock.c"
-	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_lptmr.c"
-	# UART stuff...
-	"${ProjDirPath}/drivers/devices/MKL03Z4/drivers/fsl_lpuart.c"
+	# drivers used
 )
 
 
 # ------------------------------ LINKER FILES ------------------------------ #
-set(LINKER_LOCATION "${ProjDirPath}MKL03Z4_drivers/devices/MKL03Z4/gcc/")
-set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} -T${LINKER_LOCATION}MKL03Z32xxx4_flash.ld -static")
-set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -T${LINKER_LOCATION}MKL03Z32xxx4_flash.ld -static")
-
+set(LINKER_LOCATION "${ProjDirPath}/compiler")
+set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} -T${LINKER_LOCATION}/MKE04Z8_flash.ld -static")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -T${LINKER_LOCATION}/MKE04Z8_flash.ld -static")
 
 
 # --------------------- RESOLVING CIRCULAR DEPENDENCIES -------------------- #
 # http://stackoverflow.com/questions/5651869/gcc-what-are-the-start-group-and-end-group-command-line-options
 
-TARGET_LINK_LIBRARIES(motor_driver.elf -Wl,--start-group)
+TARGET_LINK_LIBRARIES(OvenTemp.elf -Wl,--start-group)
 
-target_link_libraries(motor_driver.elf debug m)
+target_link_libraries(OvenTemp.elf debug m)
+target_link_libraries(OvenTemp.elf debug c)
+target_link_libraries(OvenTemp.elf debug gcc)
+target_link_libraries(OvenTemp.elf debug nosys)
+target_link_libraries(OvenTemp.elf optimized m)
+target_link_libraries(OvenTemp.elf optimized c)
+target_link_libraries(OvenTemp.elf optimized gcc)
+target_link_libraries(OvenTemp.elf optimized nosys)
 
-target_link_libraries(motor_driver.elf debug c)
-
-target_link_libraries(motor_driver.elf debug gcc)
-
-target_link_libraries(motor_driver.elf debug nosys)
-
-target_link_libraries(motor_driver.elf optimized m)
-
-target_link_libraries(motor_driver.elf optimized c)
-
-target_link_libraries(motor_driver.elf optimized gcc)
-
-target_link_libraries(motor_driver.elf optimized nosys)
-
-TARGET_LINK_LIBRARIES(motor_driver.elf -Wl,--end-group)
+TARGET_LINK_LIBRARIES(OvenTemp.elf -Wl,--end-group)

@@ -131,7 +131,7 @@ def build_display_size(build_type, chip_total_flash):
     """
     Expected output from the arm toolchain size function:
     text    data     bss     dec     hex filename
-    6772     112     664    7548    1d7c debug/motor_driver.elf
+    6772     112     664    7548    1d7c debug/OvenTemp.elf
 
     Adds in a percentage measurement.
     """
@@ -141,9 +141,14 @@ def build_display_size(build_type, chip_total_flash):
     print("\n———————————— {} BUILD SIZE ———————————————\n".format(b))
     sys.stdout.write(bcolors.COLOR_NC)
     sys.stdout.flush()
-    file_location = "{}/motor_driver.elf".format(build_type)
+    file_location = "{}/OvenTemp.elf".format(build_type)
     cmd = "arm-none-eabi-size {}".format(file_location)
     stdout, stderr, retval = run_command(cmd, print_output=False)
+    if retval:
+        print("Failed to run!!!")
+        print("stdout: {}".format(stdout))
+        print("stderr: {}".format(stderr))
+        return
     fields = stdout.splitlines()[0].split()
     values = stdout.splitlines()[1].split()
 
@@ -171,7 +176,7 @@ def build_get_section_info(build_type, chip_total_flash):
     sys.stdout.write(bcolors.COLOR_NC)
     sys.stdout.flush()
     cmd = "arm-none-eabi-nm --print-size --size-sort --radix=d " + \
-        "--defined-only {}/motor_driver.elf".format(build_type.lower())
+        "--defined-only {}/OvenTemp.elf".format(build_type.lower())
 
     stdout, stderr, retval = run_command(cmd, print_output=False)
 
@@ -222,7 +227,7 @@ def run_command(cmd, print_output=True):
         try:
             line_stdout = ""
             while True:
-                line_stdout += q_stdout.get_nowait()  # or q.get(timeout=.1)
+                line_stdout += q_stdout.get_nowait().decode("utf-8")
         except Empty:
             pass
         # accumilate stdout and print(if we should)
@@ -233,7 +238,7 @@ def run_command(cmd, print_output=True):
         try:
             line_stderr = ""
             while True:
-                line_stderr += q_stderr.get_nowait()  # or q.get(timeout=.1)
+                line_stderr += q_stderr.get_nowait().decode("utf-8")
         except Empty:
             pass
         # accumilate stderr and print(if we should)
