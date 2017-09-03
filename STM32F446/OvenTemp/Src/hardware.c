@@ -5,7 +5,9 @@
  * @brief   Hardware specific initialization and such.
  */
 
+#include "common.h"
 #include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_iwdg.h"
 
 extern ADC_HandleTypeDef hadc1;
 extern DMA_HandleTypeDef hdma_adc1;
@@ -14,7 +16,9 @@ extern I2C_HandleTypeDef hi2c1;
 
 extern TIM_HandleTypeDef htim1;
 
-extern WWDG_HandleTypeDef hwwdg;
+extern IWDG_HandleTypeDef hiwdg;
+
+#define WDG_COUNT  (410u)  // TODO: recalculate
 
 
 /** System Clock Configuration
@@ -138,7 +142,8 @@ void hw_I2C1_Init(void)
     }
 }
 
-/* TIM1 init function */
+
+/* TIM1 init function */ /*
 void hw_TIM1_Init(void)
 {
     TIM_ClockConfigTypeDef sClockSourceConfig;
@@ -166,20 +171,43 @@ void hw_TIM1_Init(void)
     if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK) {
         _Error_Handler(__FILE__, __LINE__);
     }
-}
+}  */
 
-/* WWDG init function */
-void hw_WWDG_Init(void)
+
+/*! Initializes the independent watchdog module to require a pet every 10 ms
+ *
+ * @return success or failure of initializing the watchdog module
+ */
+void hw_IWDG_Init(void)
 {
-    hwwdg.Instance = WWDG;
-    hwwdg.Init.Prescaler = WWDG_PRESCALER_1;
-    hwwdg.Init.Window = 64;
-    hwwdg.Init.Counter = 64;
-    hwwdg.Init.EWIMode = WWDG_EWI_DISABLE;
-    if (HAL_WWDG_Init(&hwwdg) != HAL_OK) {
+    // the LSI counter used for wdg timer is @41KHz.
+    // 10 ms counter window count: counter_val = (10 ms) * (41 kHz) ~= 410
+    hiwdg.Instance = IWDG;
+    //! Select the prescaler of the IWDG. This parameter can be a value of @ref IWDG_Prescaler
+    hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
+    /*! Specifies the IWDG down-counter reload value. This parameter must
+      be a number between Min_Data = 0 and Max_Data = 0x0FFFU */
+    hiwdg.Init.Reload = WDG_COUNT;
+
+    if (HAL_IWDG_Init(&hiwdg) != HAL_OK) {
         _Error_Handler(__FILE__, __LINE__);
     }
+    __HAL_DBGMCU_FREEZE_IWDG();
 }
+
+/*! Resets the watchdog timer (pets it) so we don't reset
+ *
+ * @return success or failure of petting the watchdog
+ */
+ret_t wdg_pet(void)
+{
+    if (HAL_IWDG_Refresh(&hiwdg) == HAL_OK) {
+        return RET_OK;
+    } else {
+        return RET_GEN_ERR;
+    }
+}
+
 
 /**
   * Enable DMA controller clock

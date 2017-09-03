@@ -8,6 +8,7 @@
  */
 
 /* Includes ------------------------------------------------------------------*/
+#include <stdbool.h>
 #include "common.h"
 #include "hardware.h"
 #include "stm32f4xx_hal.h"
@@ -20,12 +21,14 @@ I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim1;
 
-WWDG_HandleTypeDef hwwdg;
+IWDG_HandleTypeDef hiwdg;
 
 /* Private variables ---------------------------------------------------------*/
 
 
 /* Private function prototypes -----------------------------------------------*/
+bool wdg_isSet(void);
+void wdg_clearFlags(void);
 
 
 int main(void)
@@ -41,8 +44,12 @@ int main(void)
     hw_DMA_Init();
     hw_ADC1_Init();
     hw_I2C1_Init();
-    hw_TIM1_Init();
-    hw_WWDG_Init();
+    // hw_TIM1_Init();
+    hw_IWDG_Init();
+
+    if ( wdg_isSet() ) {
+        printf("Watchdog!\n");
+    }
 
     /* Initialize interrupts */
     hw_NVIC_Init();
@@ -50,7 +57,33 @@ int main(void)
     /* Infinite loop */
     while (1) {
         // Main loop
+        wdg_pet();
     }
+}
+
+
+
+/*! Checks if the watchdog was the reason for our reset
+ *
+ * @return true if watchdog was the reason for the reset
+ */
+bool wdg_isSet(void)
+{
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) == RESET) {
+        wdg_clearFlags();
+        return false;
+    } else {
+        wdg_clearFlags();
+        return true;
+    }
+}
+
+/*! Private method to reset the reset flags on boot
+ */
+void wdg_clearFlags(void)
+{
+    // Clear reset flags
+    __HAL_RCC_CLEAR_RESET_FLAGS();
 }
 
 
