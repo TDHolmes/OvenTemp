@@ -5,3 +5,5 @@
 -IDrivers/CMSIS/Include
 -DUSE_HAL_DRIVER
 -DSTM32F446xx
+-arch=arm
+-march=arm

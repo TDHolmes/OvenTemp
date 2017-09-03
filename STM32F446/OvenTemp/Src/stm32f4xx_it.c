@@ -45,7 +45,7 @@ extern ADC_HandleTypeDef hadc1;
 extern I2C_HandleTypeDef hi2c1;
 
 /******************************************************************************/
-/*            Cortex-M4 Processor Interruption and Exception Handlers         */ 
+/*            Cortex-M4 Processor Interruption and Exception Handlers         */
 /******************************************************************************/
 
 /**
