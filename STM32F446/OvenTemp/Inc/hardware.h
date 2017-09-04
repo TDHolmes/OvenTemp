@@ -4,8 +4,11 @@
  * @date    2-Sept-2017
  * @brief   Hardware specific initialization and such.
  */
-
 #pragma once
+
+#include <stdbool.h>
+#include "common.h"
+
 
 void SystemClock_Config(void);
 void hw_GPIO_Init(void);
@@ -16,4 +19,5 @@ void hw_I2C1_Init(void);
 void hw_IWDG_Init(void);
 void hw_NVIC_Init(void);
 
-ret_t wdg_pet(void);
+ret_t hw_wdg_pet(void);
+bool hw_wdg_isSet(void);

@@ -72,6 +72,7 @@ Src/stm32f4xx_hal_msp.c \
 Src/system_stm32f4xx.c \
 Src/main.c \
 Src/hardware.c \
+Src/LEDBackpack.c \
 
 # ASM sources
 ASM_SOURCES =  \

@@ -4,7 +4,9 @@
  * @date    2-Sept-2017
  * @brief   Hardware specific initialization and such.
  */
+#include <stdbool.h>
 
+#include "hardware.h"
 #include "common.h"
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_iwdg.h"
@@ -19,6 +21,9 @@ extern TIM_HandleTypeDef htim1;
 extern IWDG_HandleTypeDef hiwdg;
 
 #define WDG_COUNT  (410u)  // TODO: recalculate
+
+// Private functions
+static void hw_wdg_clearFlags(void);
 
 
 /** System Clock Configuration
@@ -174,13 +179,13 @@ void hw_TIM1_Init(void)
 }  */
 
 
-/*! Initializes the independent watchdog module to require a pet every 10 ms
+/*! Initializes the independent watchdog module to require a pet every N ms  TODO: update timing
  *
  * @return success or failure of initializing the watchdog module
  */
 void hw_IWDG_Init(void)
 {
-    // the LSI counter used for wdg timer is @41KHz.
+    // the LSI counter used for wdg timer is @41KHz.  # TODO: update math
     // 10 ms counter window count: counter_val = (10 ms) * (41 kHz) ~= 410
     hiwdg.Instance = IWDG;
     //! Select the prescaler of the IWDG. This parameter can be a value of @ref IWDG_Prescaler
@@ -199,13 +204,36 @@ void hw_IWDG_Init(void)
  *
  * @return success or failure of petting the watchdog
  */
-ret_t wdg_pet(void)
+ret_t hw_wdg_pet(void)
 {
     if (HAL_IWDG_Refresh(&hiwdg) == HAL_OK) {
         return RET_OK;
     } else {
         return RET_GEN_ERR;
     }
+}
+
+/*! Checks if the watchdog was the reason for our reset
+ *
+ * @return true if watchdog was the reason for the reset
+ */
+bool hw_wdg_isSet(void)
+{
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) == RESET) {
+        hw_wdg_clearFlags();
+        return false;
+    } else {
+        hw_wdg_clearFlags();
+        return true;
+    }
+}
+
+/*! Private method to reset the reset flags on boot
+ */
+static void hw_wdg_clearFlags(void)
+{
+    // Clear reset flags
+    __HAL_RCC_CLEAR_RESET_FLAGS();
 }
 
 
