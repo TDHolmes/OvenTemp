@@ -5,6 +5,7 @@
  * @brief   Interface to the thermocouple temperature sensor
  */
 // #include <stdbool.h>
+#include <stbool.h>
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_adc.h"
@@ -12,6 +13,7 @@
 #include "common.h"
 
 #define NUM_READINGS  (8)  // TODO: justify
+#define THERM_GET_IDEX()   (vref_index == NUM_READINGS - 1 ? 0 : vref_index)
 
 extern ADC_HandleTypeDef hadc1;
 
@@ -22,16 +24,44 @@ static uint32_t pending_readings[2];
 
 static uint8_t vout_index = 0;
 static uint8_t vref_index = 0;
+static bool keep_converting = true;
+static bool reading_ready = false;
+static bool ADC_running = false;
 
 
-static void therm_ADC_start(void)
+void therm_init(void)
+{
+    for (int8_t i = NUM_READINGS - 1; i > 0; i--) {
+        vout_readings[i] = 0;
+        vref_readings[i] = 0;
+    }
+    pending_readings[0] = 0;
+    pending_readings[1] = 0;
+    reading_ready = false;
+}
+
+void therm_ADC_start(bool single)
 {
     // Start an ADC conversions for both channels
     if (HAL_ADC_Start_DMA(&hadc1, pending_readings, 2) != HAL_OK) {
         Error_Handler();
     }
+    if (single) {
+        reading_ready = false;
+    }
+    keep_converting = !single;
+    ADC_running = true;
 }
 
+void therm_ADC_stop(bool immediate)
+{
+    if (immediate) {
+        if (HAL_ADC_Stop_DMA(&hadc1) != HAL_OK) {
+            Error_Handler();
+        }
+    }
+    keep_converting = false;
+}
 
 void therm_ADCdone(void)
 {
@@ -45,8 +75,26 @@ void therm_ADCdone(void)
     if (vref_index >= NUM_READINGS) {
         vref_index = 0;
     }
-    // setup another round of readings
-    therm_ADC_start();
+    if (keep_converting) {
+        // setup another round of readings
+        therm_ADC_start(false);
+        if (!reading_ready && vref_index == 0) {
+            // We've had enough readings!
+            reading_ready = true;
+        }
+    } else {
+        // Only one reading. Ready to read
+        reading_ready = true;
+        ADC_running = false;
+    }
+}
+
+bool therm_valueReady(void) {
+    return reading_ready;
+}
+
+bool therm_ADCRunning(void) {
+    return ADC_running;
 }
 
 /*! Gets a reading from the thermocouple, returning
@@ -76,8 +124,8 @@ float therm_getValue_averaged(void)
  */
 float therm_getValue_single(void)
 {
-    float sensor = vout_readings[vout_index];
-    float v1_25 = vref_readings[vref_index];
+    float sensor = vout_readings[THERM_GET_IDEX()];
+    float v1_25 = vref_readings[THERM_GET_IDEX()];
 
     // Normalize and send out
     float vout = sensor * (1.25 / v1_25);
