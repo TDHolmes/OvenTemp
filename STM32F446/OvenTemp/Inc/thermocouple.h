@@ -9,6 +9,7 @@
 #include <stdbool.h>
 
 void therm_init(void);
+void therm_ADC_start(bool single);
 void therm_ADCdone(void);
 float therm_getValue_averaged(void);
 float therm_getValue_single(void);
@@ -19,3 +20,11 @@ inline float c2f(float celsius_data);
 // Status functions
 bool therm_ADCRunning(void);
 bool therm_valueReady(void);
+
+
+/*! Converts celsius to farenheight.
+ */
+inline float c2f(float celsius_data)
+{
+    return celsius_data * (9.0 / 5.0) + 32.0;
+}

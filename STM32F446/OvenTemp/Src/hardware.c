@@ -18,16 +18,12 @@ extern DMA_HandleTypeDef hdma_adc1;
 
 extern I2C_HandleTypeDef hi2c1;
 
-extern TIM_HandleTypeDef htim1;
 extern RTC_HandleTypeDef hrtc;
-
-extern IWDG_HandleTypeDef hiwdg;
+extern UART_HandleTypeDef huart4;
 
 #define WDG_COUNT  (410u)  // TODO: recalculate
 
 // Private functions
-static void hw_wdg_clearFlags(void);
-
 
 /** System Clock Configuration
 */
@@ -160,38 +156,6 @@ void hw_I2C1_Init(void)
     }
 }
 
-
-/* TIM1 init function */ /*
-void hw_TIM1_Init(void)
-{
-    TIM_ClockConfigTypeDef sClockSourceConfig;
-    TIM_MasterConfigTypeDef sMasterConfig;
-
-    htim1.Instance = TIM1;
-    htim1.Init.Prescaler = 0;
-    htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-    htim1.Init.Period = 0;
-    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-    htim1.Init.RepetitionCounter = 0;
-    if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-    {
-        Error_Handler();
-    }
-
-    sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-    if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-    {
-        Error_Handler();
-    }
-
-    sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-    if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK) {
-        Error_Handler();
-    }
-}  */
-
-
 /* RTC init function */
 void hw_RTC_Init(void)
 {
@@ -281,62 +245,4 @@ void hw_GPIO_Init(void)
     /* GPIO Ports Clock Enable */
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
-}
-
-
-/*! Initializes the independent watchdog module to require a pet every N ms  TODO: update timing
- *
- * @return success or failure of initializing the watchdog module
- */
-void hw_IWDG_Init(void)
-{
-    // the LSI counter used for wdg timer is @41KHz.  # TODO: update math
-    // 10 ms counter window count: counter_val = (10 ms) * (41 kHz) ~= 410
-    hiwdg.Instance = IWDG;
-    //! Select the prescaler of the IWDG. This parameter can be a value of @ref IWDG_Prescaler
-    hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
-    /*! Specifies the IWDG down-counter reload value. This parameter must
-      be a number between Min_Data = 0 and Max_Data = 0x0FFFU */
-    hiwdg.Init.Reload = WDG_COUNT;
-
-    if (HAL_IWDG_Init(&hiwdg) != HAL_OK) {
-        Error_Handler();
-    }
-    __HAL_DBGMCU_FREEZE_IWDG();
-}
-
-/*! Resets the watchdog timer (pets it) so we don't reset
- *
- * @return success or failure of petting the watchdog
- */
-ret_t hw_wdg_pet(void)
-{
-    if (HAL_IWDG_Refresh(&hiwdg) == HAL_OK) {
-        return RET_OK;
-    } else {
-        return RET_GEN_ERR;
-    }
-}
-
-/*! Checks if the watchdog was the reason for our reset
- *
- * @return true if watchdog was the reason for the reset
- */
-bool hw_wdg_isSet(void)
-{
-    if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) == RESET) {
-        hw_wdg_clearFlags();
-        return false;
-    } else {
-        hw_wdg_clearFlags();
-        return true;
-    }
-}
-
-/*! Private method to reset the reset flags on boot
- */
-static void hw_wdg_clearFlags(void)
-{
-    // Clear reset flags
-    __HAL_RCC_CLEAR_RESET_FLAGS();
 }

@@ -5,7 +5,7 @@
  * @brief   Interface to the thermocouple temperature sensor
  */
 // #include <stdbool.h>
-#include <stbool.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_adc.h"
@@ -130,11 +130,4 @@ float therm_getValue_single(void)
     // Normalize and send out
     float vout = sensor * (1.25 / v1_25);
     return (vout - 1.25) / 0.005;
-}
-
-/*! Converts celsius to farenheight.
- */
-inline float c2f(float celsius_data)
-{
-    return celsius_data * (9.0 / 5.0) + 32.0;
 }
