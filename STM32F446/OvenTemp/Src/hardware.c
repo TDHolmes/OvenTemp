@@ -47,7 +47,7 @@ void SystemClock_Config(void)
     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
     if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
     {
-        _Error_Handler(__FILE__, __LINE__);
+        Error_Handler();
     }
 
         /**Initializes the CPU, AHB and APB busses clocks
@@ -61,7 +61,7 @@ void SystemClock_Config(void)
 
     if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
     {
-        _Error_Handler(__FILE__, __LINE__);
+        Error_Handler();
     }
 
         /**Configure the Systick interrupt time
@@ -115,19 +115,29 @@ void hw_ADC1_Init(void)
     hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
     if (HAL_ADC_Init(&hadc1) != HAL_OK)
     {
-        _Error_Handler(__FILE__, __LINE__);
+        Error_Handler();
     }
 
     /** Configure for the selected ADC regular channel its corresponding rank in
         the sequencer and its sample time. */
-    sConfig.Channel = ADC_CHANNEL_VREFINT;
+    // Pin A4  (TODO: Vout from thermocouple?)
+    sConfig.Channel = ADC_CHANNEL_5;
     sConfig.Rank = 1;
     sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
     if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
     {
-        _Error_Handler(__FILE__, __LINE__);
+        Error_Handler();
     }
 
+    // Pin A5  (TODO: Vref from thermocouple?)
+    sConfig.Channel = ADC_CHANNEL_4;
+    sConfig.Rank = 2;
+    sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    // TODO: configure GPIO pins A4 and A5 for analog?
 }
 
 /* I2C1 init function */
@@ -143,7 +153,7 @@ void hw_I2C1_Init(void)
     hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
     hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
     if (HAL_I2C_Init(&hi2c1) != HAL_OK) {
-        _Error_Handler(__FILE__, __LINE__);
+        Error_Handler();
     }
 }
 
@@ -162,21 +172,39 @@ void hw_TIM1_Init(void)
     htim1.Init.RepetitionCounter = 0;
     if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
     {
-        _Error_Handler(__FILE__, __LINE__);
+        Error_Handler();
     }
 
     sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
     if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
     {
-        _Error_Handler(__FILE__, __LINE__);
+        Error_Handler();
     }
 
     sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
     sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
     if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK) {
-        _Error_Handler(__FILE__, __LINE__);
+        Error_Handler();
     }
 }  */
+
+/**
+  * Enable DMA controller clock
+  */
+void hw_DMA_Init(void)
+{
+    /* DMA controller clock enable */
+    __HAL_RCC_DMA2_CLK_ENABLE();
+}
+
+/** Pinout Configuration
+*/
+void hw_GPIO_Init(void)
+{
+    /* GPIO Ports Clock Enable */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+}
 
 
 /*! Initializes the independent watchdog module to require a pet every N ms  TODO: update timing
@@ -195,7 +223,7 @@ void hw_IWDG_Init(void)
     hiwdg.Init.Reload = WDG_COUNT;
 
     if (HAL_IWDG_Init(&hiwdg) != HAL_OK) {
-        _Error_Handler(__FILE__, __LINE__);
+        Error_Handler();
     }
     __HAL_DBGMCU_FREEZE_IWDG();
 }
@@ -234,23 +262,4 @@ static void hw_wdg_clearFlags(void)
 {
     // Clear reset flags
     __HAL_RCC_CLEAR_RESET_FLAGS();
-}
-
-
-/**
-  * Enable DMA controller clock
-  */
-void hw_DMA_Init(void)
-{
-    /* DMA controller clock enable */
-    __HAL_RCC_DMA2_CLK_ENABLE();
-}
-
-/** Pinout Configuration
-*/
-void hw_GPIO_Init(void)
-{
-    /* GPIO Ports Clock Enable */
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOB_CLK_ENABLE();
 }

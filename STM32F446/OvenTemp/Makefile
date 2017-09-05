@@ -73,6 +73,7 @@ Src/system_stm32f4xx.c \
 Src/main.c \
 Src/hardware.c \
 Src/LEDBackpack.c \
+Src/thermocouple.c \
 
 # ASM sources
 ASM_SOURCES =  \

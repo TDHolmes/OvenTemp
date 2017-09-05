@@ -2,6 +2,15 @@
 A portable, battery powered temperature monitor for ovens that don't have temperature displays.
 
 
+## Requirements
+
+1. Refreshes temperature every second during cooking
+2. Is easily readable from 10 feet away
+3. Turns on automatically at 120 F
+4. Has a battery life of a month of normal use
+   - Normal use is four uses in a week with one hour of active oven time each
+   - 16 hours active, ~656 hours idle
+
 ## Current Measurements
 
 ### Arduino, max brightness, no optimizations
