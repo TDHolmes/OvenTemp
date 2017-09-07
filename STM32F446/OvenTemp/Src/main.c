@@ -72,78 +72,90 @@ uint16_t sleep_time;
 /* Private function prototypes -----------------------------------------------*/
 
 
-  int main(void)
-  {
-      float temperature;
+int main(void)
+{
+    float temperature;
 
-      /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-      HAL_Init();
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    HAL_Init();
 
-      /* Configure the system clock */
-      SystemClock_Config();
+    /* Configure the system clock */
+    SystemClock_Config();
 
-      /* Initialize all configured peripherals */
-      hw_GPIO_Init();
-      hw_DMA_Init();
-      hw_ADC1_Init();
-      hw_I2C1_Init();
+    /* Initialize all configured peripherals */
+    hw_GPIO_Init();
+    GPIO_InitTypeDef gpiob_def;
+    gpiob_def.Pin = GPIO_PIN_9;
+    gpiob_def.Mode = GPIO_MODE_OUTPUT_OD;
+    gpiob_def.Pull = GPIO_PULLUP;
+    gpiob_def.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    HAL_GPIO_Init(GPIOB, &gpiob_def);
+    while (1) {
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+        HAL_Delay(1);
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
+        HAL_Delay(1);
+    }
+    hw_DMA_Init();
+    hw_ADC1_Init();
+    hw_I2C1_Init();
 
-      hw_RTC_Init();
-      hw_UART4_Init();
+    hw_RTC_Init();
+    hw_UART4_Init();
 
-      /* Initialize interrupts */
-      hw_NVIC_Init();
+    /* Initialize interrupts */
+    hw_NVIC_Init();
 
-      disp_init(DISP_I2C_ADDR);
+    disp_init(DISP_I2C_ADDR);
 
-      // Write out some  test values
-      disp_writeDigit_value(0, 1, false);
-      disp_writeDigit_value(1, 2, false);
-      disp_writeDigit_value(2, 3, false);
-      disp_writeDigit_value(3, 4, false);
-      disp_writeDisplay();
+    // Write out some  test values
+    disp_writeDigit_value(0, 1, false);
+    disp_writeDigit_value(1, 2, false);
+    disp_writeDigit_value(2, 3, false);
+    disp_writeDigit_value(3, 4, false);
+    disp_writeDisplay();
 
-      therm_init();
-      therm_ADC_start(false);  // trigger a single reading...
-      /* Infinite loop */
-      while (1) {
-          // Main loop
-          switch (mode) {
-              case kIdleMode:
-                  if ( therm_ADCRunning() ) {
-                      if ( therm_valueReady() ) {
-                          temperature = therm_getValue_single();
-                          if (temperature >= ACTIVE_TEMP_THRESHOLD) {
-                              mode = kActiveMode;
-                              therm_ADC_start(false);
-                          } else {
-                              // temperature below needed value. deep sleep for a minute
-                              // RTC Clock: 32768 Hz / 16
-                              if ( HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, IDLE_MODE_SLEEPTIME,
-                                      RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK) {
-                                  Error_Handler();
-                              }
-                              HAL_PWR_EnterSTANDBYMode();
-                          }
-                      } else {
-                          // Not done yet... Keep snoozin!
-                          HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
-                      }
-                  } else {
-                      // Conversion not currently running. Start one and go to sleep
-                      // We will get automatically woken up by ADC / DMA interrupt
-                      therm_ADC_start(true);
-                      HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
-                  }
-                  break;
+    therm_init();
+    therm_ADC_start(false);  // trigger a single reading...
+    /* Infinite loop */
+    while (1) {
+        // Main loop
+        switch (mode) {
+            case kIdleMode:
+                if ( therm_ADCRunning() ) {
+                    if ( therm_valueReady() ) {
+                        temperature = therm_getValue_single();
+                        if (temperature >= ACTIVE_TEMP_THRESHOLD) {
+                            mode = kActiveMode;
+                            therm_ADC_start(false);
+                        } else {
+                            // temperature below needed value. deep sleep for a minute
+                            // RTC Clock: 32768 Hz / 16
+                            if ( HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, IDLE_MODE_SLEEPTIME,
+                                RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK) {
+                                Error_Handler();
+                            }
+                            HAL_PWR_EnterSTANDBYMode();
+                        }
+                    } else {
+                        // Not done yet... Keep snoozin!
+                        HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
+                    }
+                } else {
+                    // Conversion not currently running. Start one and go to sleep
+                    // We will get automatically woken up by ADC / DMA interrupt
+                    therm_ADC_start(true);
+                    HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
+                }
+                break;
 
-              case kActiveMode:
+            case kActiveMode:
 
-                  sleep_time = ACTIVE_MODE_SLEEPTIME;
-                  break;
-          }
-      }
-  }
+                sleep_time = ACTIVE_MODE_SLEEPTIME;
+                break;
+        }
+    }
+}
 
 
 /**
