@@ -16,7 +16,7 @@
 extern ADC_HandleTypeDef hadc1;
 extern DMA_HandleTypeDef hdma_adc1;
 
-extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hI2C3;
 
 extern RTC_HandleTypeDef hrtc;
 extern UART_HandleTypeDef huart4;
@@ -82,12 +82,12 @@ void hw_NVIC_Init(void)
     /* ADC_IRQn interrupt configuration */
     HAL_NVIC_SetPriority(ADC_IRQn, 0, 0);  // preempt, sub-priority
     HAL_NVIC_EnableIRQ(ADC_IRQn);
-    /* I2C1_EV_IRQn interrupt configuration */
-    HAL_NVIC_SetPriority(I2C1_EV_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
-    /* I2C1_ER_IRQn interrupt configuration */
-    HAL_NVIC_SetPriority(I2C1_ER_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
+    /* I2C3_EV_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(I2C3_EV_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(I2C3_EV_IRQn);
+    /* I2C3_ER_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(I2C3_ER_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(I2C3_ER_IRQn);
     /* DMA2_Stream0_IRQn interrupt configuration */
     HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
@@ -139,19 +139,19 @@ void hw_ADC1_Init(void)
     // TODO: configure GPIO pins A4 and A5 for analog?
 }
 
-/* I2C1 init function */
-void hw_I2C1_Init(void)
+/* I2C3 init function */
+void hw_I2C3_Init(void)
 {
-    hi2c1.Instance = I2C1;
-    hi2c1.Init.ClockSpeed = 100000;
-    hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-    hi2c1.Init.OwnAddress1 = 0;
-    hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-    hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-    hi2c1.Init.OwnAddress2 = 0;
-    hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-    hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-    if (HAL_I2C_Init(&hi2c1) != HAL_OK) {
+    hI2C3.Instance = I2C3;
+    hI2C3.Init.ClockSpeed = 100000;
+    hI2C3.Init.DutyCycle = I2C_DUTYCYCLE_2;
+    hI2C3.Init.OwnAddress1 = 0;
+    hI2C3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+    hI2C3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+    hI2C3.Init.OwnAddress2 = 0;
+    hI2C3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+    hI2C3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+    if (HAL_I2C_Init(&hI2C3) != HAL_OK) {
         Error_Handler();
     }
 }

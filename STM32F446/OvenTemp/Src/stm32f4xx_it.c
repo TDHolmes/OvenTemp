@@ -42,7 +42,7 @@
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_adc1;
 extern ADC_HandleTypeDef hadc1;
-extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hI2C3;
 
 /******************************************************************************/
 /*            Cortex-M4 Processor Interruption and Exception Handlers         */
@@ -201,31 +201,31 @@ void ADC_IRQHandler(void)
 }
 
 /**
-* @brief This function handles I2C1 event interrupt.
+* @brief This function handles I2C3 event interrupt.
 */
-void I2C1_EV_IRQHandler(void)
+void I2C3_EV_IRQHandler(void)
 {
-  /* USER CODE BEGIN I2C1_EV_IRQn 0 */
+  /* USER CODE BEGIN I2C3_EV_IRQn 0 */
 
-  /* USER CODE END I2C1_EV_IRQn 0 */
-  HAL_I2C_EV_IRQHandler(&hi2c1);
-  /* USER CODE BEGIN I2C1_EV_IRQn 1 */
+  /* USER CODE END I2C3_EV_IRQn 0 */
+  HAL_I2C_EV_IRQHandler(&hI2C3);
+  /* USER CODE BEGIN I2C3_EV_IRQn 1 */
 
-  /* USER CODE END I2C1_EV_IRQn 1 */
+  /* USER CODE END I2C3_EV_IRQn 1 */
 }
 
 /**
-* @brief This function handles I2C1 error interrupt.
+* @brief This function handles I2C3 error interrupt.
 */
-void I2C1_ER_IRQHandler(void)
+void I2C3_ER_IRQHandler(void)
 {
-  /* USER CODE BEGIN I2C1_ER_IRQn 0 */
+  /* USER CODE BEGIN I2C3_ER_IRQn 0 */
 
-  /* USER CODE END I2C1_ER_IRQn 0 */
-  HAL_I2C_ER_IRQHandler(&hi2c1);
-  /* USER CODE BEGIN I2C1_ER_IRQn 1 */
+  /* USER CODE END I2C3_ER_IRQn 0 */
+  HAL_I2C_ER_IRQHandler(&hI2C3);
+  /* USER CODE BEGIN I2C3_ER_IRQn 1 */
 
-  /* USER CODE END I2C1_ER_IRQn 1 */
+  /* USER CODE END I2C3_ER_IRQn 1 */
 }
 
 /**

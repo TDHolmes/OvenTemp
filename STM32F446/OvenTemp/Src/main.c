@@ -54,7 +54,7 @@
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
-I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hI2C3;
 
 RTC_HandleTypeDef hrtc;
 
@@ -98,7 +98,7 @@ int main(void)
     }
     hw_DMA_Init();
     hw_ADC1_Init();
-    hw_I2C1_Init();
+    hw_I2C3_Init();
 
     hw_RTC_Init();
     hw_UART4_Init();

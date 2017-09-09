@@ -30,7 +30,7 @@ static const uint16_t alpha_point_mask = 0b1000000000000000;
 static uint8_t i2c_addr;
 static uint16_t displaybuffer[4];
 
-extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hI2C3;
 
 void disp_init(uint8_t addr)
 {
@@ -38,7 +38,7 @@ void disp_init(uint8_t addr)
 
     // turn on oscillator
     uint8_t data = 0x21;
-    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hi2c1, (uint16_t)i2c_addr, &data, 1, 5);
+    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hI2C3, (uint16_t)i2c_addr, &data, 1, 5);
     if (retval != HAL_OK) {
         Error_Handler();
     }
@@ -53,7 +53,7 @@ void disp_setBrightness(uint8_t b)
         b = 15;
     }
     uint8_t data = HT16K33_CMD_BRIGHTNESS | b;
-    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hi2c1, (uint16_t)i2c_addr, &data, 1, 5);
+    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hI2C3, (uint16_t)i2c_addr, &data, 1, 5);
     if (retval != HAL_OK) {
         Error_Handler();
     }
@@ -66,7 +66,7 @@ void disp_blinkRate(uint8_t b)
     }
 
     uint8_t data = HT16K33_BLINK_CMD | HT16K33_BLINK_DISPLAYON | (b << 1);
-    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hi2c1, (uint16_t)i2c_addr, &data, 1, 5);
+    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hI2C3, (uint16_t)i2c_addr, &data, 1, 5);
     if (retval != HAL_OK) {
         Error_Handler();
     }
@@ -98,7 +98,7 @@ void disp_writeDisplay(void)
         data[i + 1] = displaybuffer[i] & 0xFF;
         data[i + 2] = displaybuffer[i] >> 8;
     }
-    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hi2c1, (uint16_t)i2c_addr,
+    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hI2C3, (uint16_t)i2c_addr,
                                                        data, 8, 5);
     if (retval != HAL_OK) {
         Error_Handler();
