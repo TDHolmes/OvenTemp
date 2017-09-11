@@ -30,4 +30,6 @@ typedef enum {
 
 void _Error_Handler(char *, int);
 
+void Error_Handler_with_retval(char * file, int line, int retval);
+
 #define Error_Handler() _Error_Handler(__FILE__, __LINE__)

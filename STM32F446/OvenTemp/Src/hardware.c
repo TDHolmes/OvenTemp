@@ -120,7 +120,7 @@ void hw_ADC1_Init(void)
     /** Configure for the selected ADC regular channel its corresponding rank in
         the sequencer and its sample time. */
     // Pin A4  (TODO: Vout from thermocouple?)
-    sConfig.Channel = ADC_CHANNEL_5;
+    sConfig.Channel = ADC_CHANNEL_6;
     sConfig.Rank = 1;
     sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
     if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -242,7 +242,33 @@ void hw_DMA_Init(void)
 */
 void hw_GPIO_Init(void)
 {
+    GPIO_InitTypeDef GPIO_InitStruct;
+
     /* GPIO Ports Clock Enable */
     __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOB_CLK_ENABLE();
+    // __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+
+    // PA5 is LD2 LED
+    GPIO_InitStruct.Pin = GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    // GPIO_InitStruct.Alternate = 0;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+
+
+void hw_LED_setValue(uint8_t value)
+{
+    if (value == 0) {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+    } else {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+    }
+}
+
+void hw_LED_toggle(void)
+{
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
 }

@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define DISP_I2C_ADDR  (0x70)
+#define DISP_I2C_ADDR  (0x70 << 1)
 
 #define LED_ON 1
 #define LED_OFF 0

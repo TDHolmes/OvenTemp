@@ -7,6 +7,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "common.h"
 
 
@@ -18,3 +19,7 @@ void hw_I2C3_Init(void);
 void hw_RTC_Init(void);
 void hw_UART4_Init(void);
 void hw_NVIC_Init(void);
+
+
+void hw_LED_setValue(uint8_t value);
+void hw_LED_toggle(void);
