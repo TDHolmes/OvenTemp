@@ -7,10 +7,12 @@
 // #include <stdbool.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>  // TODO: remove
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_adc.h"
 // #include "stm32f4xx_hal_dma.h"
 #include "common.h"
+#include "hardware.h"
 
 #define NUM_READINGS  (8)  // TODO: justify
 #define THERM_GET_IDEX()   (vref_index == NUM_READINGS - 1 ? 0 : vref_index)
@@ -20,13 +22,15 @@ extern ADC_HandleTypeDef hadc1;
 static float vout_readings[NUM_READINGS];
 static float vref_readings[NUM_READINGS];
 
-static uint32_t pending_readings[2];
+static uint32_t pending_readings[3];
 
 static uint8_t vout_index = 0;
 static uint8_t vref_index = 0;
 static bool keep_converting = true;
 static bool reading_ready = false;
 static bool ADC_running = false;
+
+void therm_ADCdone(void);
 
 
 void therm_init(void)
@@ -37,13 +41,14 @@ void therm_init(void)
     }
     pending_readings[0] = 0;
     pending_readings[1] = 0;
+    pending_readings[2] = 0;
     reading_ready = false;
 }
 
 void therm_ADC_start(bool single)
 {
     // Start an ADC conversions for both channels
-    if (HAL_ADC_Start_DMA(&hadc1, pending_readings, 2) != HAL_OK) {
+    if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
         Error_Handler();
     }
     if (single) {
@@ -61,6 +66,29 @@ void therm_ADC_stop(bool immediate)
         }
     }
     keep_converting = false;
+}
+
+extern UART_HandleTypeDef huart4;
+uint32_t values[3];
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+    static uint8_t index = 0;
+    values[index] = HAL_ADC_GetValue(hadc);
+    index++;
+    if (index == 3) {
+        index = 0;
+        char str_buff[100];
+        sprintf(str_buff, "New Data! \r\n\tch 1:%i\r\n\tch 2:%i\r\n\ttemp:%i\r\n", values[0], values[1], values[2]);
+        HAL_UART_Transmit(&huart4, str_buff, strlen((const char *)str_buff), 10);
+        for (volatile uint32_t i = 300000; i !=0; i--);
+    }
+    if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+void HAL_ADC_ErrorCallback(ADC_HandleTypeDef* hadc) {
+    Error_Handler_with_retval(__FILE__, __LINE__, hadc->ErrorCode);
 }
 
 void therm_ADCdone(void)
@@ -115,8 +143,9 @@ float therm_getValue_averaged(void)
     // Normalize and send out
     sensor = sensor / NUM_READINGS;
     v1_25 = v1_25 / NUM_READINGS;
-    float vout = sensor * (1.25 / v1_25);
-    return (vout - 1.25) / 0.005;
+    float vout = sensor * (1.25f / v1_25);
+    reading_ready = false;
+    return (vout - 1.25f) / 0.005f;
 }
 
 /*! Gets a reading from the thermocouple, returning
@@ -128,6 +157,7 @@ float therm_getValue_single(void)
     float v1_25 = vref_readings[THERM_GET_IDEX()];
 
     // Normalize and send out
-    float vout = sensor * (1.25 / v1_25);
-    return (vout - 1.25) / 0.005;
+    float vout = sensor * (1.25f / v1_25);
+    reading_ready = false;
+    return (vout - 1.25f) / 0.005f;
 }

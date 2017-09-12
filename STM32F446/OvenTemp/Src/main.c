@@ -38,6 +38,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include "common.h"
 #include "hardware.h"
 #include "LEDBackpack.h"
@@ -68,6 +69,10 @@ typedef enum {
 
 e_main_modes mode = kIdleMode;
 uint16_t sleep_time;
+uint8_t str_buff[64];
+
+// Delay that doesn't use interrupts for when things go wrong
+void blocking_delay(volatile uint32_t delay);
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -84,39 +89,38 @@ int main(void)
 
     /* Initialize all configured peripherals */
     hw_GPIO_Init();
-    GPIO_InitTypeDef gpiob_def;
-    gpiob_def.Pin = GPIO_PIN_9;
-    gpiob_def.Mode = GPIO_MODE_OUTPUT_OD;
-    gpiob_def.Pull = GPIO_PULLUP;
-    gpiob_def.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    HAL_GPIO_Init(GPIOB, &gpiob_def);
-    while (1) {
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
-        HAL_Delay(1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
-        HAL_Delay(1);
-    }
-    hw_DMA_Init();
+    // hw_DMA_Init();
     hw_ADC1_Init();
     hw_I2C3_Init();
 
-    hw_RTC_Init();
+    // hw_RTC_Init();
     hw_UART4_Init();
 
     /* Initialize interrupts */
     hw_NVIC_Init();
 
     disp_init(DISP_I2C_ADDR);
-
-    // Write out some  test values
-    disp_writeDigit_value(0, 1, false);
-    disp_writeDigit_value(1, 2, false);
-    disp_writeDigit_value(2, 3, false);
-    disp_writeDigit_value(3, 4, false);
+    hw_LED_setValue(0);
+    disp_writeDigit_value(0, 0, false);
+    disp_writeDigit_value(1, 1, false);
+    disp_writeDigit_value(2, 2, false);
+    disp_writeDigit_value(3, 3, false);
     disp_writeDisplay();
 
     therm_init();
-    therm_ADC_start(false);  // trigger a single reading...
+    therm_ADC_start(true);  // trigger a single reading...
+    sprintf(str_buff, "Starting Data...\r\n");
+    HAL_UART_Transmit(&huart4, str_buff, strlen((const char *)str_buff), 10);
+    while (1) {
+        if ( therm_valueReady() ) {
+            temperature = therm_getValue_single();
+            sprintf((char *)str_buff, "%f\r\n", temperature);
+            HAL_UART_Transmit(&huart4, str_buff, strlen((const char *)str_buff), 10);
+            therm_ADC_start(true);
+        }
+    }
+
+
     /* Infinite loop */
     while (1) {
         // Main loop
@@ -165,13 +169,30 @@ int main(void)
   */
 void _Error_Handler(char * file, int line)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  while(1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+    /* USER CODE BEGIN Error_Handler_Debug */
+    /* User can add his own implementation to report the HAL error return state */
+    Error_Handler_with_retval(file, line, 0);
 }
+
+
+void Error_Handler_with_retval(char * file, int line, int retval)
+{
+    sprintf((char *)str_buff, "%s:%i  ->  %i\r\n", file, line, retval);
+    while(1)
+    {
+        hw_LED_setValue(0);
+        blocking_delay(300000);
+        hw_LED_setValue(1);
+        blocking_delay(300000);
+        HAL_UART_Transmit(&huart4, str_buff, strlen((const char *)str_buff), 10);
+    }
+}
+
+
+void blocking_delay(volatile uint32_t delay) {
+    for (; delay != 0; delay--);
+}
+
 
 #ifdef USE_FULL_ASSERT
 
