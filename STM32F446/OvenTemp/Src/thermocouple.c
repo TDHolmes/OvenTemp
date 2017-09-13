@@ -30,7 +30,7 @@ static bool keep_converting = true;
 static bool reading_ready = false;
 static bool ADC_running = false;
 
-void therm_ADCdone(void);
+void therm_ADC_done(void);
 
 
 void therm_init(void)
@@ -43,9 +43,10 @@ void therm_init(void)
     pending_readings[1] = 0;
     pending_readings[2] = 0;
     reading_ready = false;
+    ADC_running = false;
 }
 
-void therm_ADC_start(bool single)
+void therm_start(bool single)
 {
     // Start an ADC conversions for both channels
     if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
@@ -58,40 +59,7 @@ void therm_ADC_start(bool single)
     ADC_running = true;
 }
 
-void therm_ADC_stop(bool immediate)
-{
-    if (immediate) {
-        if (HAL_ADC_Stop_DMA(&hadc1) != HAL_OK) {
-            Error_Handler();
-        }
-    }
-    keep_converting = false;
-}
-
-extern UART_HandleTypeDef huart4;
-uint32_t values[3];
-
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-    static uint8_t index = 0;
-    values[index] = HAL_ADC_GetValue(hadc);
-    index++;
-    if (index == 3) {
-        index = 0;
-        char str_buff[100];
-        sprintf(str_buff, "New Data! \r\n\tch 1:%i\r\n\tch 2:%i\r\n\ttemp:%i\r\n", values[0], values[1], values[2]);
-        HAL_UART_Transmit(&huart4, str_buff, strlen((const char *)str_buff), 10);
-        for (volatile uint32_t i = 300000; i !=0; i--);
-    }
-    if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
-        Error_Handler();
-    }
-}
-
-void HAL_ADC_ErrorCallback(ADC_HandleTypeDef* hadc) {
-    Error_Handler_with_retval(__FILE__, __LINE__, hadc->ErrorCode);
-}
-
-void therm_ADCdone(void)
+void therm_ADC_done(void)
 {
     vout_readings[vout_index] = (float)pending_readings[0];
     vout_index += 1;
@@ -105,7 +73,7 @@ void therm_ADCdone(void)
     }
     if (keep_converting) {
         // setup another round of readings
-        therm_ADC_start(false);
+        therm_start(false);
         if (!reading_ready && vref_index == 0) {
             // We've had enough readings!
             reading_ready = true;
@@ -160,4 +128,41 @@ float therm_getValue_single(void)
     float vout = sensor * (1.25f / v1_25);
     reading_ready = false;
     return (vout - 1.25f) / 0.005f;
+}
+
+/****** ADC Callback functions *********/
+
+/*! The calback from the ADC interrupt that fires each time it converts
+ *  a channel and stores it in `pending_readings`. Also keeps track if all channels
+ *  are done converting and modifies the flags `ADC_running`.
+ */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+    // Get the readings
+    static uint8_t index = 0;
+    pending_readings[index] = HAL_ADC_GetValue(hadc);
+    index++;
+    if (index == 3) {
+        if (keep_converting) {
+            ADC_running = true;
+            if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
+                Error_Handler();
+            }
+        } else {
+            ADC_running = false;
+        }
+    } else {
+        ADC_running = true;
+        if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
+            Error_Handler();
+        }
+    }
+    therm_ADC_done();
+}
+
+/*! This function is called if the ADC peripheral runs into a critical error.
+ */
+void HAL_ADC_ErrorCallback(ADC_HandleTypeDef* hadc)
+{
+    Error_Handler_with_retval(__FILE__, __LINE__, hadc->ErrorCode);
 }

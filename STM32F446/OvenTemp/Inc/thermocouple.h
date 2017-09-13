@@ -9,8 +9,8 @@
 #include <stdbool.h>
 
 void therm_init(void);
-void therm_ADC_start(bool single);
-void therm_ADCdone(void);
+void therm_start(bool single);
+void therm_ADC_done(void);
 float therm_getValue_averaged(void);
 float therm_getValue_single(void);
 

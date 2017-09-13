@@ -108,7 +108,7 @@ int main(void)
     disp_writeDisplay();
 
     therm_init();
-    therm_ADC_start(true);  // trigger a single reading...
+    therm_start(true);  // trigger a single reading...
     sprintf(str_buff, "Starting Data...\r\n");
     HAL_UART_Transmit(&huart4, str_buff, strlen((const char *)str_buff), 10);
     while (1) {
@@ -116,7 +116,7 @@ int main(void)
             temperature = therm_getValue_single();
             sprintf((char *)str_buff, "%f\r\n", temperature);
             HAL_UART_Transmit(&huart4, str_buff, strlen((const char *)str_buff), 10);
-            therm_ADC_start(true);
+            therm_start(true);
         }
     }
 
@@ -131,7 +131,7 @@ int main(void)
                         temperature = therm_getValue_single();
                         if (temperature >= ACTIVE_TEMP_THRESHOLD) {
                             mode = kActiveMode;
-                            therm_ADC_start(false);
+                            therm_start(false);
                         } else {
                             // temperature below needed value. deep sleep for a minute
                             // RTC Clock: 32768 Hz / 16
@@ -148,7 +148,7 @@ int main(void)
                 } else {
                     // Conversion not currently running. Start one and go to sleep
                     // We will get automatically woken up by ADC / DMA interrupt
-                    therm_ADC_start(true);
+                    therm_start(true);
                     HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
                 }
                 break;
