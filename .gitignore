@@ -1,6 +1,6 @@
-# Project ignores:
+# --------- Project ignores --------- #
 
-firmware/drivers/src/projects/
+*/docs/output
 
 # --------- C gitignore ------------- #
 # Prerequisites

@@ -230,6 +230,21 @@ inline void blocking_delay(volatile uint32_t delay) {
 }
 
 
+// Index for doxygen
+/*! \mainpage Documentation for OvenTemp project!
+ *
+ * \section intro_sec Introduction
+ *
+ * This project is a simple thermocouple with display to easily see the temperature
+ * of an old oven that doesn't have a digital display. It is designed to be battery
+ * powered and smart enough to only turn on when needed. It uses an STM32f446
+ * microcontroller because that was the easiest development board I had laying
+ * around to use. It is also quite nice to work with and has good low power
+ * performance.
+ *
+ */
+
+
 /********************** BEGIN STUPID COPYRIGHT NOTICE **************************
 ** This notice applies to any and all portions of this file
 * that are not made by Tyler Holmes. Other portions of this file, whether
