@@ -82,14 +82,14 @@ int main(void)
     disp_writeDisplay();
 
     therm_init();
-    therm_start(true);  // trigger a single reading...
+    therm_startReading_single();  // trigger a single reading...
     // Block on getting an initial reading in order to initialize state properly.
     while (1) {
         if ( therm_valueReady() ) {
             temperature = therm_getValue_single();
             if (temperature >= ACTIVE_TEMP_THRESHOLD) {
                 mode = kActiveMode;
-                therm_start(false);
+                therm_startReading_continuous();
             } else {
                 mode = kIdleMode;
             }
@@ -106,7 +106,7 @@ int main(void)
                     temperature = therm_getValue_single();
                     if (temperature >= ACTIVE_TEMP_THRESHOLD) {
                         mode = kActiveMode;
-                        therm_start(false);  // Continuous thermocouple conversion
+                        therm_startReading_continuous();  // Continuous thermocouple conversion
                     } else {
                         // temperature below needed value. deep sleep for a minute
                         HAL_StatusTypeDef ret = HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, IDLE_MODE_SLEEPTIME,
@@ -115,7 +115,7 @@ int main(void)
                             Error_Handler_withRetval(__FILE__, __LINE__, (int)ret);
                         }
                         HAL_PWR_EnterSTANDBYMode();
-                        therm_start(true);  // Start a single thermocouple read after we wake back up
+                        therm_startReading_single();  // Start a single thermocouple read after we wake back up
                     }
                 } else {
                     // Not done yet... Keep snoozin! ADC interrupt should wake us from SLEEP
@@ -128,7 +128,7 @@ int main(void)
                     temperature = therm_getValue_averaged();
                     if (temperature < ACTIVE_TEMP_THRESHOLD) {
                         mode = kIdleMode;
-                        therm_start(true);  // Single thermocouple conversion
+                        therm_startReading_single();  // Single thermocouple conversion
                     } else {
                         // temperature at needed value. Display temp
                         displayTemp(temperature);

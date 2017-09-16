@@ -4,35 +4,42 @@
  * @date    2-Sept-2017
  * @brief   Interface to the thermocouple temperature sensor
  */
-// #include <stdbool.h>
+
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>  // TODO: remove
+
+#include "common.h"
+#include "hardware.h"
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_adc.h"
 // #include "stm32f4xx_hal_dma.h"
-#include "common.h"
-#include "hardware.h"
+
 
 #define NUM_READINGS  (8)  // TODO: justify
-#define THERM_GET_IDEX()   (vref_index == NUM_READINGS - 1 ? 0 : vref_index)
+#define THERM_GET_IDEX()   (reading_index == (NUM_READINGS - 1) ? 0 : reading_index)
 
+  //! HAL ADC handle to get readings
 extern ADC_HandleTypeDef hadc1;
 
-static float vout_readings[NUM_READINGS];
-static float vref_readings[NUM_READINGS];
+static float vout_readings[NUM_READINGS];  //!< circular buffer of readings for averaging
+static float vref_readings[NUM_READINGS];  //!< circular buffer of readings for averaging
 
+//! Where the ADC stores the current reading, via either DMA or interrupt
 static uint32_t pending_readings[3];
-
-static uint8_t vout_index = 0;
-static uint8_t vref_index = 0;
-static bool keep_converting = true;
-static bool reading_ready = false;
-static bool ADC_running = false;
-
-void therm_ADC_done(void);
+//! The current, most valid index from the ADC stored in `vout_readings` or `vref_readings`
+static uint8_t reading_index;
+static bool keep_converting;  //!< tracks if we should continue triggering ADC conversions
+static bool reading_ready;    //!< True if there is a valid reading available
+static bool ADC_running;      //!< True if we are currently running the ADC peripheral
 
 
+// Private function definitions
+static void therm_ADC_done(void);
+static void therm_startReading(bool single);
+
+/*! Initializes all private variables for the thermocouple module to work.
+ *    Does NOT start an ADC reading.
+ */
 void therm_init(void)
 {
     for (int8_t i = NUM_READINGS - 1; i > 0; i--) {
@@ -42,40 +49,62 @@ void therm_init(void)
     pending_readings[0] = 0;
     pending_readings[1] = 0;
     pending_readings[2] = 0;
+    reading_index = 0;
     reading_ready = false;
     ADC_running = false;
 }
 
-void therm_start(bool single)
+/*! Private function that either kicks off a single ADC reading or continuous
+ *    readings. Called by the public functions `therm_startReading_single` and
+ *    `therm_startReading_continuous`.
+ */
+static void therm_startReading(bool single_reading)
 {
     // Start an ADC conversions for both channels
     if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
         Error_Handler();
     }
-    if (single) {
+    if (single_reading) {
         reading_ready = false;
     }
-    keep_converting = !single;
+    if (keep_converting != !single_reading) {
+        // This is our first time getting called for continuous readings. reset
+        //   the `reading_index` to make sure we get all new values when averaging.
+        reading_index = 0;
+        keep_converting = true;
+    }
     ADC_running = true;
 }
 
-void therm_ADC_done(void)
+/*! starts a single ADC reading.
+ */
+void therm_startReading_single(void) {
+    therm_startReading(true);
+}
+
+/*! starts continuous ADC readings.
+ */
+void therm_startReading_continuous(void) {
+    therm_startReading(false);
+}
+
+/*! Private function that gets called after the ADC is done converting all thermocouple
+ *   values and pulls them from the `pending_readings` array. Also triggers another
+ *   reading if the `keep_converting` flag is set.
+ */
+static void therm_ADC_done(void)
 {
-    vout_readings[vout_index] = (float)pending_readings[0];
-    vout_index += 1;
-    if (vout_index >= NUM_READINGS) {
-        vout_index = 0;
-    }
-    vref_readings[vref_index] = (float)pending_readings[1];
-    vref_index += 1;
-    if (vref_index >= NUM_READINGS) {
-        vref_index = 0;
+    vout_readings[reading_index] = (float)pending_readings[0];
+    vref_readings[reading_index] = (float)pending_readings[1];
+    reading_index += 1;
+    if (reading_index >= NUM_READINGS) {
+        reading_index = 0;
     }
     if (keep_converting) {
         // setup another round of readings
-        therm_start(false);
-        if (!reading_ready && vref_index == 0) {
-            // We've had enough readings!
+        therm_startReading_continuous();
+        if (!reading_ready && reading_index == 0) {
+            // We've had enough readings to get a valid, averaged temperature
             reading_ready = true;
         }
     } else {
@@ -85,25 +114,28 @@ void therm_ADC_done(void)
     }
 }
 
+/*! Returns true if there is a valid reading ready, either single if not doing
+ *   continuous readings, else enough to get an averaged result
+ */
 bool therm_valueReady(void) {
     return reading_ready;
 }
 
+/*! Returns true if the ADC is currently reading data in. Not currently used.
+ */
 bool therm_ADCRunning(void) {
     return ADC_running;
 }
 
 /*! Gets a reading from the thermocouple, returning
- *  the value in celsius.
+ *  the value in celsius with averaging over time.
  */
 float therm_getValue_averaged(void)
 {
-    float sensor = 0;
-    float v1_25 = 0;
-    // Turn on the thermocouple and wait for it to come on
+    float sensor, v1_25, vout = 0;
 
-    // Gather some readings and average them
-    for (int i = NUM_READINGS; i > 0; i--) {
+    // Gather the readings and average them
+    for (int8_t i = NUM_READINGS - 1; i >= 0; i--) {
         sensor += vout_readings[i];
         v1_25 += vref_readings[i];
     }
@@ -111,8 +143,7 @@ float therm_getValue_averaged(void)
     // Normalize and send out
     sensor = sensor / NUM_READINGS;
     v1_25 = v1_25 / NUM_READINGS;
-    float vout = sensor * (1.25f / v1_25);
-    reading_ready = false;
+    vout = sensor * (1.25f / v1_25);
     return (vout - 1.25f) / 0.005f;
 }
 
@@ -130,34 +161,37 @@ float therm_getValue_single(void)
     return (vout - 1.25f) / 0.005f;
 }
 
+
 /****** ADC Callback functions *********/
 
+
 /*! The calback from the ADC interrupt that fires each time it converts
- *  a channel and stores it in `pending_readings`. Also keeps track if all channels
+ *  a channel, then stores it in `pending_readings`. Also keeps track if all channels
  *  are done converting and modifies the flags `ADC_running`.
  */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
     // Get the readings
-    static uint8_t index = 0;
-    pending_readings[index] = HAL_ADC_GetValue(hadc);
-    index++;
-    if (index == 3) {
+    static uint8_t pending_index = 0;
+    pending_readings[pending_index] = HAL_ADC_GetValue(hadc);
+    pending_index++;
+    if (pending_index == 3) {
         if (keep_converting) {
-            ADC_running = true;
+            // kick off another reading!
             if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
                 Error_Handler();
             }
-        } else {
-            ADC_running = false;
         }
+        // update state
+        ADC_running = keep_converting;
+        pending_index = 0;
+        therm_ADC_done();
     } else {
         ADC_running = true;
         if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
             Error_Handler();
         }
     }
-    therm_ADC_done();
 }
 
 /*! This function is called if the ADC peripheral runs into a critical error.
