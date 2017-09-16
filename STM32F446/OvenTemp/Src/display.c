@@ -1,12 +1,12 @@
 /*!
- * @file    LEDBackpack.c
+ * @file    display.c
  * @author  Tyler Holmes
  * @date    2-Sept-2017
  * @brief   C library adapted from the quad I2C LED Backpack adafruit code. More info at bottom.
  */
 
 #include <stdint.h>
-#include "LEDBackpack.h"
+#include "display.h"
 #include "common.h"
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_i2c.h"
@@ -160,7 +160,7 @@ void disp_init(uint8_t addr)
     uint8_t data = 0x21;
     HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hI2C3, (uint16_t)i2c_addr, &data, 1, 500);
     if (retval != HAL_OK) {
-        Error_Handler_with_retval(__FILE__, __LINE__, retval);
+        Error_Handler_withRetval(__FILE__, __LINE__, retval);
     }
     disp_blinkRate(HT16K33_BLINK_OFF);
 

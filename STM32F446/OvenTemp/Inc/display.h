@@ -1,5 +1,5 @@
 /*!
- * @file    LEDBackpack.h
+ * @file    display.h
  * @author  Tyler Holmes
  * @date    2-Sept-2017
  * @brief   C library adapted from the I2C LED Backpack adafruit code. More info at bottom.

@@ -164,5 +164,5 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
  */
 void HAL_ADC_ErrorCallback(ADC_HandleTypeDef* hadc)
 {
-    Error_Handler_with_retval(__FILE__, __LINE__, hadc->ErrorCode);
+    Error_Handler_withRetval(__FILE__, __LINE__, hadc->ErrorCode);
 }
