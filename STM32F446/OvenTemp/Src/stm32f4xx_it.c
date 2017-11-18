@@ -108,7 +108,9 @@ void SysTick_Handler(void)
 */
 void I2C3_EV_IRQHandler(void)
 {
+    // hw_TimingPin_setValue(kTimingPin_D11, 1);
     HAL_I2C_EV_IRQHandler(&hI2C3);
+    // hw_TimingPin_setValue(kTimingPin_D11, 0);
 }
 
 /**
@@ -116,7 +118,9 @@ void I2C3_EV_IRQHandler(void)
 */
 void I2C3_ER_IRQHandler(void)
 {
+    hw_TimingPin_setValue(kTimingPin_D11, 1);
     HAL_I2C_ER_IRQHandler(&hI2C3);
+    hw_TimingPin_setValue(kTimingPin_D11, 0);
 }
 
 /**
@@ -124,7 +128,9 @@ void I2C3_ER_IRQHandler(void)
 */
 void ADC_IRQHandler(void)
 {
+    // hw_TimingPin_setValue(kTimingPin_D11, 1);
     HAL_ADC_IRQHandler(&hadc1);
+    // hw_TimingPin_setValue(kTimingPin_D11, 0);
 }
 
 /**
