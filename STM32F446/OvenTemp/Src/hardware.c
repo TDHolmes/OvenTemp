@@ -15,9 +15,7 @@
 
 extern ADC_HandleTypeDef hadc1;
 extern DMA_HandleTypeDef hdma_adc1;
-
 extern I2C_HandleTypeDef hI2C3;
-
 extern RTC_HandleTypeDef hrtc;
 extern UART_HandleTypeDef huart4;
 
@@ -80,7 +78,7 @@ void SystemClock_Config(void)
 void hw_NVIC_Init(void)
 {
     /* ADC_IRQn interrupt configuration */
-    HAL_NVIC_SetPriority(ADC_IRQn, 0, 0);  // preempt, sub-priority
+    HAL_NVIC_SetPriority(ADC_IRQn, 2, 2);  // preempt, sub-priority
     HAL_NVIC_EnableIRQ(ADC_IRQn);
     /* I2C3_EV_IRQn interrupt configuration */
     HAL_NVIC_SetPriority(I2C3_EV_IRQn, 0, 0);
@@ -89,7 +87,7 @@ void hw_NVIC_Init(void)
     HAL_NVIC_SetPriority(I2C3_ER_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(I2C3_ER_IRQn);
     /* DMA2_Stream0_IRQn interrupt configuration */
-    HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 1, 1);
     HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 }
 
@@ -110,7 +108,7 @@ void hw_ADC1_Init(void)
     hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
     hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
     hadc1.Init.NbrOfDiscConversion = 1;
-    hadc1.Init.NbrOfConversion = 3;
+    hadc1.Init.NbrOfConversion = NUM_ADC_CHANNELS;
     hadc1.Init.DMAContinuousRequests = DISABLE;
     hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
     if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -122,7 +120,7 @@ void hw_ADC1_Init(void)
       */
     sConfig.Channel = ADC_CHANNEL_4;
     sConfig.Rank = 1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_56CYCLES;
+    sConfig.SamplingTime = ADC_SAMPLETIME_112CYCLES;
     if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
     {
       _Error_Handler(__FILE__, __LINE__);
@@ -132,15 +130,6 @@ void hw_ADC1_Init(void)
       */
     sConfig.Channel = ADC_CHANNEL_6;
     sConfig.Rank = 2;
-    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-    {
-      _Error_Handler(__FILE__, __LINE__);
-    }
-
-      /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-      */
-    sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
-    sConfig.Rank = 3;
     if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
     {
       _Error_Handler(__FILE__, __LINE__);
@@ -180,33 +169,36 @@ void hw_RTC_Init(void)
   hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
   hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
   hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  HAL_StatusTypeDef ret = HAL_RTC_Init(&hrtc);
+  if (ret != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    Error_Handler_withRetval(ret);
   }
 
     /**Initialize RTC and set the Time and Date
     */
-  if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != 0x32F2){
-  sTime.Hours = 0x0;
-  sTime.Minutes = 0x0;
-  sTime.Seconds = 0x0;
-  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
+  if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != 0x32F2) {
+      sTime.Hours = 0x0;
+      sTime.Minutes = 0x0;
+      sTime.Seconds = 0x0;
+      sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+      sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+      ret = HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
+      if (ret != HAL_OK)
+      {
+        Error_Handler_withRetval(ret);
+      }
 
-  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-  sDate.Month = RTC_MONTH_JANUARY;
-  sDate.Date = 0x1;
-  sDate.Year = 0x0;
+      sDate.WeekDay = RTC_WEEKDAY_MONDAY;
+      sDate.Month = RTC_MONTH_JANUARY;
+      sDate.Date = 0x1;
+      sDate.Year = 0x0;
 
-  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
+      ret = HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
+      if (ret != HAL_OK)
+      {
+        Error_Handler_withRetval(ret);
+      }
 
     HAL_RTCEx_BKUPWrite(&hrtc,RTC_BKP_DR0,0x32F2);
   }
@@ -234,7 +226,6 @@ void hw_UART4_Init(void)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-
 }
 
 /**
@@ -262,8 +253,8 @@ void hw_GPIO_Init(void)
     // __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
 
-    // PA5 is LD2 LED
-    GPIO_InitStruct.Pin = GPIO_PIN_5;
+    // PA5 is LD2 LED, PA7 and PA2 are timing pins
+    GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_5 | GPIO_PIN_7;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
@@ -284,4 +275,18 @@ void hw_LED_setValue(uint8_t value)
 void hw_LED_toggle(void)
 {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+}
+
+void hw_TimingPin_setValue(timing_pin_t pin, uint8_t value)
+{
+    if (value == 0) {
+        HAL_GPIO_WritePin(GPIOA, pin, GPIO_PIN_RESET);
+    } else {
+        HAL_GPIO_WritePin(GPIOA, pin, GPIO_PIN_SET);
+    }
+}
+
+void hw_TimingPin_toggle(timing_pin_t pin)
+{
+    HAL_GPIO_TogglePin(GPIOA, pin);
 }
