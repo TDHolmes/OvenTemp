@@ -160,7 +160,7 @@ void disp_init(uint8_t addr)
     uint8_t data = 0x21;
     HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hI2C3, (uint16_t)i2c_addr, &data, 1, 500);
     if (retval != HAL_OK) {
-        Error_Handler_withRetval(__FILE__, __LINE__, retval);
+        Error_Handler_withRetval(retval);
     }
     disp_blinkRate(HT16K33_BLINK_OFF);
 
