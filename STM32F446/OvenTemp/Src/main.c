@@ -1,11 +1,11 @@
 /*!
- * @file    hardware.c
+ * @file    main.c
  * @author  Tyler Holmes
  * @date    2-Sept-2017
- * @brief   Hardware specific initialization and such.
+ * @brief   Main file for the OvenTemp project.
  *
- * @note    Stupid STM copyright notice at end.
-  */
+ *      Stupid STM copyright notice at end.
+ */
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -23,8 +23,14 @@
 //! How long we sleep between readings in active mode, in seconds.
 #define ACTIVE_MODE_SLEEPTIME  (1)
 
-//! threshold to switch to active mode, in farenheight
-#define ACTIVE_TEMP_THRESHOLD   (120)
+//! threshold to switch to active mode, in celsius?
+#define ACTIVE_TEMP_THRESHOLD   (0)
+
+#define IDLE_SAMPLE_TIME_MS    (2000)  // TODO: change to 60 seconds
+#define ACTIVE_SAMPLE_TIME_MS  (1000)
+
+//! Toggle heartbeat LED every 1000 ms
+#define HB_TICK_TIME_MS (1000)
 
 
 ADC_HandleTypeDef hadc1;      //!< HAL handle for ADC1
@@ -32,6 +38,8 @@ DMA_HandleTypeDef hdma_adc1;  //!< HAL handle for DMA for ADC1. Currently not us
 I2C_HandleTypeDef hI2C3;      //!< HAL handle for I2C3 (display)
 RTC_HandleTypeDef hrtc;       //!< HAL handle for our RTC. Used to awake us from deep sleep
 UART_HandleTypeDef huart4;    //!< HAL handle for UART4 for debug prints
+
+extern __IO uint32_t uwTick;  //!< HAL tick count
 
 
 //! Different modes the main loop can be in based on the oven temperature.
@@ -41,11 +49,21 @@ typedef enum {
 } e_main_modes;
 
 static e_main_modes mode = kIdleMode;  //!< global tracking main's state
-uint8_t str_buff[64];  //!< buffer for transmitting data over UART
+static uint8_t str_buff[64];  //!< buffer for transmitting data over UART
 
 /****  Private function definitions  ****/
 void blocking_delay(volatile uint32_t delay);
+void blinkLED_withDelay(uint32_t delay);
 void displayTemp(float temp);
+void sleep_enterSleep(void);
+void sleep_enterIdle(void);
+
+#ifdef DEBUG
+    void _print_string(char string[]);
+    #define print_string(x) _print_string(x)
+#else
+    #define print_string(x)  /* Don't do anything. */
+#endif
 
 
 /*! Main function. Initializes all peripherals needed, get's an initial thermocouple
@@ -64,17 +82,28 @@ int main(void)
 
     /* Initialize all configured peripherals */
     hw_GPIO_Init();
+
+    #ifdef DEBUG
+        hw_UART4_Init();
+    #endif
+
     hw_ADC1_Init();
     hw_I2C3_Init();
-    hw_RTC_Init();
-    hw_UART4_Init();
+    // hw_RTC_Init();
 
     /* Initialize interrupts */
     hw_NVIC_Init();
-    hw_LED_setValue(0);
 
     // Initialize display and clear all digits
     disp_init(DISP_I2C_ADDR);
+    disp_writeDigit_value(0, 1, false);
+    disp_writeDigit_value(1, 2, false);
+    disp_writeDigit_value(2, 3, false);
+    disp_writeDigit_value(3, 4, false);
+    disp_writeDisplay();
+
+    HAL_Delay(1000);
+
     disp_writeDigit_raw(0, 0);
     disp_writeDigit_raw(1, 0);
     disp_writeDigit_raw(2, 0);
@@ -82,40 +111,32 @@ int main(void)
     disp_writeDisplay();
 
     therm_init();
-    therm_startReading_single();  // trigger a single reading...
-    // Block on getting an initial reading in order to initialize state properly.
-    while (1) {
-        if ( therm_valueReady() ) {
-            temperature = therm_getValue_single();
-            if (temperature >= ACTIVE_TEMP_THRESHOLD) {
-                mode = kActiveMode;
-                therm_startReading_continuous();
-            } else {
-                mode = kIdleMode;
-            }
-            break;
-        }
-    }
-
 
     //  Main infinite loop
+    // uint8_t num_active_readings = 0;
+    uint32_t time_for_reading = HAL_GetTick() + 1000;  // Get a reading in a second
+
+    print_string("Entering Main\r\n");
+    therm_startReading_single();
     while (1) {
         switch (mode) {
             case kIdleMode:
-                if ( therm_valueReady() ) {
+
+                if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
                     temperature = therm_getValue_single();
+
+                    // sprintf((char *)str_buff, "idle temp: %f\r\n", temperature);
+                    // print_string((char *)str_buff);
+
                     if (temperature >= ACTIVE_TEMP_THRESHOLD) {
+                        time_for_reading = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
                         mode = kActiveMode;
-                        therm_startReading_continuous();  // Continuous thermocouple conversion
+                        therm_startReading_single();  // Single thermocouple conversion
                     } else {
-                        // temperature below needed value. deep sleep for a minute
-                        HAL_StatusTypeDef ret = HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, IDLE_MODE_SLEEPTIME,
-                                                                            RTC_WAKEUPCLOCK_RTCCLK_DIV16);
-                        if (ret != HAL_OK) {
-                            Error_Handler_withRetval(__FILE__, __LINE__, (int)ret);
-                        }
-                        HAL_PWR_EnterSTANDBYMode();
-                        therm_startReading_single();  // Start a single thermocouple read after we wake back up
+                        time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
+                        HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);  // TODO: switch to STANDBY for more power savings
+                        // Start a single thermocouple read after we wake back up
+                        therm_startReading_single();
                     }
                 } else {
                     // Not done yet... Keep snoozin! ADC interrupt should wake us from SLEEP
@@ -124,21 +145,24 @@ int main(void)
                 break;
 
             case kActiveMode:
-                if ( therm_valueReady() ) {
+
+                if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
                     temperature = therm_getValue_averaged();
+
+                    // sprintf((char *)str_buff, "active temp: %f\r\n", temperature);
+                    // print_string((char *)str_buff);
+
                     if (temperature < ACTIVE_TEMP_THRESHOLD) {
                         mode = kIdleMode;
+                        time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
                         therm_startReading_single();  // Single thermocouple conversion
                     } else {
                         // temperature at needed value. Display temp
+                        time_for_reading = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
                         displayTemp(temperature);
+                        therm_startReading_single();  // Single thermocouple conversion
                         // deep sleep for a second to save power
-                        HAL_StatusTypeDef ret = HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, ACTIVE_MODE_SLEEPTIME,
-                                                                            RTC_WAKEUPCLOCK_RTCCLK_DIV16);
-                        if (ret != HAL_OK) {
-                            Error_Handler_withRetval(__FILE__, __LINE__, (int)ret);
-                        }
-                        HAL_PWR_EnterSTANDBYMode();
+                        HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);  // TODO: switch back to standby
                     }
                 } else {
                     // Not done yet... Keep snoozin! ADC interrupt should wake us from SLEEP
@@ -147,6 +171,18 @@ int main(void)
                 break;
         }
     }
+}
+
+
+void sleep_enterSleep(void)
+{
+    HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
+}
+
+
+void sleep_enterIdle(void)
+{
+    HAL_PWR_EnterSTANDBYMode();
 }
 
 
@@ -188,6 +224,20 @@ void displayTemp(float temp)
 }
 
 
+void HAL_IncTick(void)
+{
+    // Handle heartbeat
+    static uint32_t HB_time = HB_TICK_TIME_MS;
+    if (uwTick >= HB_time) {
+        hw_LED_toggle();
+        HB_time = uwTick + HB_TICK_TIME_MS;
+    }
+
+    // Increment ms tick
+    uwTick++;
+}
+
+
 /**
   * @brief  This function is executed in case of error occurrence.
   * @param  None
@@ -197,7 +247,22 @@ void _Error_Handler(char * file, int line)
 {
     /* USER CODE BEGIN Error_Handler_Debug */
     /* User can add his own implementation to report the HAL error return state */
-    Error_Handler_withRetval(file, line, 0);
+    _Error_Handler_withRetval(file, line, 0);
+}
+
+
+#define SOS_O  (300000)
+#define SOS_S  (150000)
+
+
+/*! Helper function that blinks our LED with delays before and after using
+ *  `blocking_delay`.
+ */
+void blinkLED_withDelay(uint32_t delay) {
+    hw_LED_setValue(0);
+    blocking_delay(delay);
+    hw_LED_setValue(1);
+    blocking_delay(delay);
 }
 
 /*! This function is called when there is a fatal error somewhere in the code.
@@ -207,18 +272,62 @@ void _Error_Handler(char * file, int line)
  * @param  line (int): Line number on which the error occurred.
  * @param  retval (int): The error code for the failure.
  */
-void Error_Handler_withRetval(char * file, int line, int retval)
+void _Error_Handler_withRetval(char * file, int line, int retval)
 {
     sprintf((char *)str_buff, "%s:%i  ->  %i\r\n", file, line, retval);
+    int cycle = 0;
+    typedef enum { kSave, kOur, kSouls, kPause} eSOS;
+    eSOS sos_state = kSave;
     while(1)
     {
-        hw_LED_setValue(0);
-        blocking_delay(300000);
-        hw_LED_setValue(1);
-        blocking_delay(300000);
-        HAL_UART_Transmit(&huart4, str_buff, strlen((const char *)str_buff), 10);
+        cycle += 1;
+        switch (sos_state) {
+            case kSave:
+                if (cycle >= 3) {
+                    sos_state = kOur;
+                    cycle = 0;
+                }
+                blinkLED_withDelay(SOS_S);
+                break;
+
+            case kOur:
+                if (cycle >= 3) {
+                    sos_state = kSouls;
+                    cycle = 0;
+                }
+                blinkLED_withDelay(SOS_S);
+                break;
+
+            case kSouls:
+                if (cycle >= 3) {
+                    sos_state = kPause;
+                    cycle = 0;
+                }
+                blinkLED_withDelay(SOS_S);
+                break;
+
+            case kPause:
+                blocking_delay(SOS_O * 2);
+                cycle = 0;
+                sos_state = kSave;
+                break;
+        }
+
+        // Print the error once a "cycle"
+        if (cycle == 2) {
+            print_string(str_buff);
+        }
     }
 }
+
+
+
+#ifdef DEBUG
+    void _print_string(char string[]) {
+        HAL_UART_Transmit(&huart4, (uint8_t *)string,
+                          strlen((const char *)string), 10);
+    }
+#endif
 
 
 /*! Simple, dumb delay function to be used when we can't necessarily rely on
