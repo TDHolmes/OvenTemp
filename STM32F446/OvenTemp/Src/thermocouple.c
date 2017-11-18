@@ -94,14 +94,15 @@ void therm_startReading_continuous(void) {
  */
 static void therm_ADC_done(void)
 {
-    vout_readings[reading_index] = (float)pending_readings[0];
-    vref_readings[reading_index] = (float)pending_readings[1];
     reading_index += 1;
     if (reading_index >= NUM_READINGS) {
         reading_index = 0;
     }
+    vout_readings[reading_index] = (float)pending_readings[0];
+    vref_readings[reading_index] = (float)pending_readings[1];
     if (keep_converting) {
         // setup another round of readings
+        // BUG: I think we're starting it twice. Here and in the ISR.
         therm_startReading_continuous();
         if (!reading_ready && reading_index == 0) {
             // We've had enough readings to get a valid, averaged temperature
@@ -173,14 +174,13 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
     // Get the readings
     static uint8_t pending_index = 0;
+    bool start_reading = false;
     pending_readings[pending_index] = HAL_ADC_GetValue(hadc);
     pending_index++;
-    if (pending_index == 3) {
+    if (pending_index == NUM_ADC_CHANNELS) {
         if (keep_converting) {
             // kick off another reading!
-            if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
-                Error_Handler();
-            }
+            start_reading = true;
         }
         // update state
         ADC_running = keep_converting;
@@ -188,8 +188,15 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
         therm_ADC_done();
     } else {
         ADC_running = true;
-        if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
-            Error_Handler();
+        start_reading = true;
+    }
+
+    // kick off another reading if requested
+    if (start_reading) {
+        HAL_StatusTypeDef ret;
+        ret = HAL_ADC_Start_IT(&hadc1);
+        if (ret != HAL_OK) {
+            Error_Handler_withRetval(ret);
         }
     }
 }
@@ -198,5 +205,5 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
  */
 void HAL_ADC_ErrorCallback(ADC_HandleTypeDef* hadc)
 {
-    Error_Handler_withRetval(__FILE__, __LINE__, hadc->ErrorCode);
+    Error_Handler_withRetval(hadc->ErrorCode);
 }
