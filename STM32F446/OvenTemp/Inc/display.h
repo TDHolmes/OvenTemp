@@ -40,6 +40,7 @@ void disp_blinkRate(uint8_t b);
 void disp_clear(void);
 void disp_writeDigit_raw(uint8_t n, uint16_t bitmask);
 void disp_writeDigit_value(uint8_t n, uint8_t number, bool point);
+void disp_writeDigit_ascii(uint8_t n, uint8_t character, bool point);
 void disp_writeDisplay(void);
 
 

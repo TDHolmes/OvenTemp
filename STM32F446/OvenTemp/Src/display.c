@@ -143,8 +143,6 @@ static const uint16_t alphafonttable[] = {
     0b0011111111111111
 };
 
-char str_buff[32];
-
 static const uint16_t alpha_point_mask = (1<<14);
 
 static uint8_t i2c_addr;
@@ -192,18 +190,29 @@ void disp_blinkRate(uint8_t b)
     }
 }
 
-void disp_clear(void) {
+void disp_clear(void)
+{
     for (uint8_t i = 0; i < 8; i++) {
         displaybuffer[i] = 0;
     }
 }
 
-void disp_writeDigit_raw(uint8_t n, uint16_t bitmask) {
+void disp_writeDigit_raw(uint8_t n, uint16_t bitmask)
+{
     displaybuffer[n] = bitmask;
 }
 
-void disp_writeDigit_value(uint8_t n, uint8_t number, bool point) {
+void disp_writeDigit_value(uint8_t n, uint8_t number, bool point)
+{
     displaybuffer[n] = alphafonttable[number + 0x30];
+    if (point) {
+        displaybuffer[n] |= alpha_point_mask;
+    }
+}
+
+void disp_writeDigit_ascii(uint8_t n, uint8_t character, bool point)
+{
+    displaybuffer[n] = alphafonttable[character];
     if (point) {
         displaybuffer[n] |= alpha_point_mask;
     }
@@ -218,8 +227,7 @@ void disp_writeDisplay(void)
         data[2*i + 1] = displaybuffer[i] & 0xFF;
         data[2*i + 2] = displaybuffer[i] >> 8;
     }
-    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hI2C3, (uint16_t)i2c_addr,
-                                                       data, 17, 5);
+    HAL_StatusTypeDef retval = HAL_I2C_Master_Transmit(&hI2C3, (uint16_t)i2c_addr, data, 17, 5);
     if (retval != HAL_OK) {
         Error_Handler();
     }
