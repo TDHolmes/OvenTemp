@@ -30,8 +30,10 @@
 #define IDLE_SAMPLE_TIME_MS    (2000)  // TODO: change to 60 seconds
 #define ACTIVE_SAMPLE_TIME_MS  (1000)
 
-//! Toggle heartbeat LED every 1000 ms
-#define HB_TICK_TIME_MS (1000)
+//! Toggle heartbeat LED every 30 seconds
+#define HB_TICK_TIME_MS (30000)
+//! heartbeet LED is on for 1 seconds
+#define HB_ON_TIME_MS   ( 1000)
 
 
 ADC_HandleTypeDef hadc1;      //!< HAL handle for ADC1
@@ -62,8 +64,8 @@ void sleep_enterSleep(void);
 void sleep_enterIdle(void);
 
 // Modes
-void idleMode(uint32_t * time_for_reading_ptr);
-void activeMode(uint32_t * time_for_reading_ptr);
+void idleMode(void);
+void activeMode(void);
 void errMode(char * err_reason);
 
 
@@ -120,21 +122,18 @@ int main(void)
     therm_init();
 
     //  Main infinite loop
-    // uint8_t num_active_readings = 0;
-    uint32_t time_for_reading = HAL_GetTick() + 1000;  // Get a reading in a second
-
     print_string("Entering Main\r\n");
     therm_startReading_single();
     while (1) {
         switch (mode) {
             case kIdleMode:
                 print_string("kIdleMode\r\n");
-                idleMode(&time_for_reading);
+                idleMode();
                 break;
 
             case kActiveMode:
                 print_string("kActiveMode\r\n");
-                activeMode(&time_for_reading);
+                activeMode();
                 break;
 
             case kInsaneTempMode:
@@ -166,11 +165,12 @@ int main(void)
 }
 
 
-void activeMode(uint32_t * time_for_reading_ptr)
+void activeMode(void)
 {
     float temperature = 0;
+    static uint32_t time_for_reading = 0;
 
-    if ( therm_valueReady() && HAL_GetTick() >= *time_for_reading_ptr ) {
+    if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
         temperature = therm_getValue_averaged();
 
         // sprintf((char *)str_buff, "active temp: %f\r\n", temperature);
@@ -180,13 +180,13 @@ void activeMode(uint32_t * time_for_reading_ptr)
             disp_clear();
             disp_writeDisplay();
             mode = kIdleMode;
-            *time_for_reading_ptr = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
+            time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
             therm_startReading_single();  // Single thermocouple conversion
         } else if (temperature > INSANE_TEMP_THRESHOLD) {
             mode = kInsaneTempMode;
         } else {
             // temperature at needed value. Display temp
-            *time_for_reading_ptr = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
+            time_for_reading = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
             displayTemp(temperature, true);  // display temp in in farenheit
             therm_startReading_single();  // Single thermocouple conversion
             // deep sleep for a second to save power
@@ -203,22 +203,22 @@ void activeMode(uint32_t * time_for_reading_ptr)
 }
 
 
-void idleMode(uint32_t * time_for_reading_ptr)
+void idleMode(void)
 {
     float temperature;
+    static uint32_t time_for_reading = 0;
+    static uint32_t time_for_blink = 0;
+    static bool blink_on = false;
 
-    if ( therm_valueReady() && HAL_GetTick() >= *time_for_reading_ptr ) {
+    if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
         temperature = therm_getValue_single();
 
-        // sprintf((char *)str_buff, "idle temp: %f\r\n", temperature);
-        // print_string((char *)str_buff);
-
-        if (temperature >= ACTIVE_TEMP_THRESHOLD) {
-            *time_for_reading_ptr = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
+        if ( temperature >= ACTIVE_TEMP_THRESHOLD ) {
+            time_for_reading = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
             mode = kActiveMode;
             therm_startReading_single();  // Single thermocouple conversion
         } else {
-            *time_for_reading_ptr = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
+            time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
             // TODO: switch to STANDBY for more power savings
             sleep_enterSleep();
             // Start a single thermocouple read after we wake back up
@@ -230,6 +230,21 @@ void idleMode(uint32_t * time_for_reading_ptr)
     } else {
         // Not done yet... Keep snoozin! ADC interrupt should wake us from SLEEP
         sleep_enterSleep();
+    }
+
+    // Check up on the blinker
+    if ( HAL_GetTick() >= time_for_blink ) {
+        if ( blink_on == true ) {
+            disp_writeDigit_ascii(3, ' ', false);  // Turn off the blink
+            disp_writeDisplay();
+            blink_on = false;
+            time_for_blink = HAL_GetTick() + 30000;  // 30 seconds between blinks
+        } else {
+            disp_writeDigit_ascii(3, ' ', true);  // Turn on the blink
+            disp_writeDisplay();
+            blink_on = true;
+            time_for_blink = HAL_GetTick() + 500;  // 500 ms blink duration
+        }
     }
 }
 
@@ -320,11 +335,20 @@ void displayTemp(float temp, bool inFarenheit)
 
 void HAL_IncTick(void)
 {
-    // Handle heartbeat
     static uint32_t HB_time = HB_TICK_TIME_MS;
+    static bool HB_on = false;
+
+    // Handle the heartbeat LED
     if (uwTick >= HB_time) {
-        hw_LED_toggle();
-        HB_time = uwTick + HB_TICK_TIME_MS;
+        if (HB_on == false) {
+            hw_LED_setValue(1);
+            HB_time = uwTick + HB_ON_TIME_MS;
+            HB_on = true;
+        } else {
+            hw_LED_setValue(0);
+            HB_time = uwTick + HB_TICK_TIME_MS;
+            HB_on = false;
+        }
     }
 
     // Increment ms tick
