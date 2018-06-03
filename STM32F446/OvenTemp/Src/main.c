@@ -23,8 +23,9 @@
 //! How long we sleep between readings in active mode, in seconds.
 #define ACTIVE_MODE_SLEEPTIME  (1)
 
-//! threshold to switch to active mode, in celsius?
-#define ACTIVE_TEMP_THRESHOLD   (0)
+//! threshold to switch to active mode, in celsius
+#define ACTIVE_TEMP_THRESHOLD   (50.0f)
+#define INSANE_TEMP_THRESHOLD   (250.0f)
 
 #define IDLE_SAMPLE_TIME_MS    (2000)  // TODO: change to 60 seconds
 #define ACTIVE_SAMPLE_TIME_MS  (1000)
@@ -45,7 +46,9 @@ extern __IO uint32_t uwTick;  //!< HAL tick count
 //! Different modes the main loop can be in based on the oven temperature.
 typedef enum {
     kIdleMode,
-    kActiveMode
+    kActiveMode,
+    kInsaneTempMode,
+    kInvalidMainMode
 } e_main_modes;
 
 static e_main_modes mode = kIdleMode;  //!< global tracking main's state
@@ -54,9 +57,15 @@ static uint8_t str_buff[64];  //!< buffer for transmitting data over UART
 /****  Private function definitions  ****/
 void blocking_delay(volatile uint32_t delay);
 void blinkLED_withDelay(uint32_t delay);
-void displayTemp(float temp);
+void displayTemp(float temp, bool inFarenheit);
 void sleep_enterSleep(void);
 void sleep_enterIdle(void);
+
+// Modes
+void idleMode(uint32_t * time_for_reading_ptr);
+void activeMode(uint32_t * time_for_reading_ptr);
+void errMode(char * err_reason);
+
 
 #ifdef DEBUG
     void _print_string(char string[]);
@@ -72,8 +81,6 @@ void sleep_enterIdle(void);
  */
 int main(void)
 {
-    float temperature;
-
     //! Reset of all peripherals, Initializes the Flash interface and the Systick.
     HAL_Init();
 
@@ -96,10 +103,10 @@ int main(void)
 
     // Initialize display and clear all digits
     disp_init(DISP_I2C_ADDR);
-    disp_writeDigit_value(0, 1, false);
-    disp_writeDigit_value(1, 2, false);
-    disp_writeDigit_value(2, 3, false);
-    disp_writeDigit_value(3, 4, false);
+    disp_writeDigit_ascii(0, ' ', false);
+    disp_writeDigit_ascii(1, 'H', false);
+    disp_writeDigit_ascii(2, 'I', false);
+    disp_writeDigit_ascii(3, ' ', false);
     disp_writeDisplay();
 
     HAL_Delay(1000);
@@ -121,62 +128,145 @@ int main(void)
     while (1) {
         switch (mode) {
             case kIdleMode:
-
-                if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
-                    temperature = therm_getValue_single();
-
-                    // sprintf((char *)str_buff, "idle temp: %f\r\n", temperature);
-                    // print_string((char *)str_buff);
-
-                    if (temperature >= ACTIVE_TEMP_THRESHOLD) {
-                        time_for_reading = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
-                        mode = kActiveMode;
-                        therm_startReading_single();  // Single thermocouple conversion
-                    } else {
-                        time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
-                        HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);  // TODO: switch to STANDBY for more power savings
-                        // Start a single thermocouple read after we wake back up
-                        therm_startReading_single();
-                    }
-                } else {
-                    // Not done yet... Keep snoozin! ADC interrupt should wake us from SLEEP
-                    HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
-                }
+                print_string("kIdleMode\r\n");
+                idleMode(&time_for_reading);
                 break;
 
             case kActiveMode:
+                print_string("kActiveMode\r\n");
+                activeMode(&time_for_reading);
+                break;
 
-                if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
-                    temperature = therm_getValue_averaged();
-
-                    // sprintf((char *)str_buff, "active temp: %f\r\n", temperature);
-                    // print_string((char *)str_buff);
-
-                    if (temperature < ACTIVE_TEMP_THRESHOLD) {
-                        mode = kIdleMode;
-                        time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
-                        therm_startReading_single();  // Single thermocouple conversion
-                    } else {
-                        // temperature at needed value. Display temp
-                        time_for_reading = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
-                        displayTemp(temperature);
-                        therm_startReading_single();  // Single thermocouple conversion
-                        // deep sleep for a second to save power
-                        HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);  // TODO: switch back to standby
+            case kInsaneTempMode:
+                print_string("kInsaneTempMode\r\n");
+                // Write the reason for the error
+                errMode("TEMP");
+                if ( therm_valueReady() ) {
+                    if ( therm_getValue_single() < INSANE_TEMP_THRESHOLD ) {
+                        mode = kActiveMode;
                     }
-                } else {
-                    // Not done yet... Keep snoozin! ADC interrupt should wake us from SLEEP
-                    HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
+                } else if ( !therm_ADCRunning() ) {
+                    // Kick off a reading if there isn't one running
+                    therm_startReading_single();
                 }
+                break;
+
+            case kInvalidMainMode:
+                print_string("kInvalidMainMode\r\n");
+                // Write the reason for the error
+                errMode("MAIN");
+                break;
+
+            default:
+                print_string("kDefaultMainMode\n");
+                errMode("UNKN");
                 break;
         }
     }
 }
 
 
+void activeMode(uint32_t * time_for_reading_ptr)
+{
+    float temperature = 0;
+
+    if ( therm_valueReady() && HAL_GetTick() >= *time_for_reading_ptr ) {
+        temperature = therm_getValue_averaged();
+
+        // sprintf((char *)str_buff, "active temp: %f\r\n", temperature);
+        // print_string((char *)str_buff);
+
+        if (temperature < ACTIVE_TEMP_THRESHOLD) {
+            disp_clear();
+            disp_writeDisplay();
+            mode = kIdleMode;
+            *time_for_reading_ptr = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
+            therm_startReading_single();  // Single thermocouple conversion
+        } else if (temperature > INSANE_TEMP_THRESHOLD) {
+            mode = kInsaneTempMode;
+        } else {
+            // temperature at needed value. Display temp
+            *time_for_reading_ptr = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
+            displayTemp(temperature, true);  // display temp in in farenheit
+            therm_startReading_single();  // Single thermocouple conversion
+            // deep sleep for a second to save power
+            // TODO: switch back to standby
+            sleep_enterSleep();
+        }
+    } else if ( !therm_ADCRunning() ) {
+        // If we're not running temp readings, do that!
+        therm_startReading_single();
+    } else {
+        // Not done yet... Keep snoozin! ADC interrupt should wake us from SLEEP
+        sleep_enterSleep();
+    }
+}
+
+
+void idleMode(uint32_t * time_for_reading_ptr)
+{
+    float temperature;
+
+    if ( therm_valueReady() && HAL_GetTick() >= *time_for_reading_ptr ) {
+        temperature = therm_getValue_single();
+
+        // sprintf((char *)str_buff, "idle temp: %f\r\n", temperature);
+        // print_string((char *)str_buff);
+
+        if (temperature >= ACTIVE_TEMP_THRESHOLD) {
+            *time_for_reading_ptr = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
+            mode = kActiveMode;
+            therm_startReading_single();  // Single thermocouple conversion
+        } else {
+            *time_for_reading_ptr = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
+            // TODO: switch to STANDBY for more power savings
+            sleep_enterSleep();
+            // Start a single thermocouple read after we wake back up
+            therm_startReading_single();
+        }
+    } else if ( !therm_ADCRunning() ) {
+        // If we're not running temp readings, do that!
+        therm_startReading_single();
+    } else {
+        // Not done yet... Keep snoozin! ADC interrupt should wake us from SLEEP
+        sleep_enterSleep();
+    }
+}
+
+
+typedef enum {
+    kErrWriteReason,
+    kErrWriteErr
+} err_mode_state_t;
+
+void errMode(char * err_reason)
+{
+    static err_mode_state_t err_mode = kErrWriteReason;
+    static uint32_t time_for_err_display = 0;
+
+    if ( time_for_err_display < HAL_GetTick() ) {
+        if (err_mode == kErrWriteReason) {
+            for (uint8_t i = 0; i < 4; i++) {
+                disp_writeDigit_ascii(i, err_reason[i], false);
+            }
+            err_mode = kErrWriteErr;
+        } else {
+            disp_writeDigit_ascii(0, 'E', false);
+            disp_writeDigit_ascii(1, 'R', false);
+            disp_writeDigit_ascii(2, 'R', false);
+            disp_writeDigit_ascii(3, '!', false);
+            err_mode = kErrWriteReason;
+        }
+        disp_writeDisplay();
+        time_for_err_display = HAL_GetTick() + 1000;
+    }
+    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+}
+
+
 void sleep_enterSleep(void)
 {
-    HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
+    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 }
 
 
@@ -189,9 +279,13 @@ void sleep_enterIdle(void)
 /*! This function takes in a positive, floating point value from [0, 1000) and
  *   displays it on the four digit display we have with the most percision possible.
  */
-void displayTemp(float temp)
+void displayTemp(float temp, bool inFarenheit)
 {
     uint8_t a,b,c,d = 0;
+
+    if (inFarenheit) {
+        temp = temp * 1.8f + 32.0f;
+    }
     if (temp < 100) {
         a = (uint8_t)(((uint32_t)temp % 100) / 10);    // 10's place
         b = (uint8_t)((uint32_t)temp % 10);            // 1's place
