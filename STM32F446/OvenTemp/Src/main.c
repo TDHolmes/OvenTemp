@@ -122,22 +122,22 @@ int main(void)
     therm_init();
 
     //  Main infinite loop
-    print_string("Entering Main\r\n");
+    print_string("Entering Main\n");
     therm_startReading_single();
     while (1) {
         switch (mode) {
             case kIdleMode:
-                print_string("kIdleMode\r\n");
+                print_string("kIdleMode\n");
                 idleMode();
                 break;
 
             case kActiveMode:
-                print_string("kActiveMode\r\n");
+                print_string("kActiveMode\n");
                 activeMode();
                 break;
 
             case kInsaneTempMode:
-                print_string("kInsaneTempMode\r\n");
+                print_string("kInsaneTempMode\n");
                 // Write the reason for the error
                 errMode("TEMP");
                 if ( therm_valueReady() ) {
@@ -151,7 +151,7 @@ int main(void)
                 break;
 
             case kInvalidMainMode:
-                print_string("kInvalidMainMode\r\n");
+                print_string("kInvalidMainMode\n");
                 // Write the reason for the error
                 errMode("MAIN");
                 break;
@@ -173,7 +173,7 @@ void activeMode(void)
     if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
         temperature = therm_getValue_averaged();
 
-        // sprintf((char *)str_buff, "active temp: %f\r\n", temperature);
+        // sprintf((char *)str_buff, "active temp: %f\n", temperature);
         // print_string((char *)str_buff);
 
         if (temperature < ACTIVE_TEMP_THRESHOLD) {
@@ -392,7 +392,7 @@ void blinkLED_withDelay(uint32_t delay) {
  */
 void _Error_Handler_withRetval(char * file, int line, int retval)
 {
-    sprintf((char *)str_buff, "%s:%i  ->  %i\r\n", file, line, retval);
+    sprintf((char *)str_buff, "%s:%i  ->  %i\n", file, line, retval);
     int cycle = 0;
     typedef enum { kSave, kOur, kSouls, kPause} eSOS;
     eSOS sos_state = kSave;
@@ -413,7 +413,7 @@ void _Error_Handler_withRetval(char * file, int line, int retval)
                     sos_state = kSouls;
                     cycle = 0;
                 }
-                blinkLED_withDelay(SOS_S);
+                blinkLED_withDelay(SOS_O);
                 break;
 
             case kSouls:
@@ -425,7 +425,8 @@ void _Error_Handler_withRetval(char * file, int line, int retval)
                 break;
 
             case kPause:
-                blocking_delay(SOS_O * 2);
+                hw_LED_setValue(0);
+                blocking_delay(SOS_O * 3);
                 cycle = 0;
                 sos_state = kSave;
                 break;
