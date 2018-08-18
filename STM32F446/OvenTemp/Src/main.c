@@ -17,6 +17,16 @@
 #include "thermocouple.h"
 #include "stm32f4xx_hal.h"
 
+#ifdef __APPLE__
+    #define SECTION(X) section("__DATA,__" X )
+    #define SECTION_START(X) __asm("section$start$__DATA$__" X)
+    #define SECTION_END(X) __asm("section$end$__DATA$__" X)
+#else
+    #define SECTION(X) section(X)
+    #define SECTION_START(X)
+    #define SECTION_END(X)
+#endif
+
 
 //! How long we sleep between readings in idle mode, in seconds.
 #define IDLE_MODE_SLEEPTIME    (60)
@@ -29,6 +39,9 @@
 
 #define IDLE_SAMPLE_TIME_MS    (2000)  // TODO: change to 60 seconds
 #define ACTIVE_SAMPLE_TIME_MS  (1000)
+
+#define IDLE_BLINK_PERIOD_MS    (1000)
+#define IDLE_BLINK_DURATION_MS  (500)
 
 //! Toggle heartbeat LED every 30 seconds
 #define HB_TICK_TIME_MS (30000)
@@ -61,7 +74,7 @@ void blocking_delay(volatile uint32_t delay);
 void blinkLED_withDelay(uint32_t delay);
 void displayTemp(float temp, bool inFarenheit);
 void sleep_enterSleep(void);
-void sleep_enterIdle(void);
+void sleep_enterStop(void);
 
 // Modes
 void idleMode(void);
@@ -96,15 +109,23 @@ int main(void)
         hw_UART4_Init();
     #endif
 
+    print_string("Hello World!\n");
+
     hw_ADC1_Init();
     hw_I2C3_Init();
-    // hw_RTC_Init();
+    hw_RTC_Init();
+
+    while (true) {
+        print_string("beep boop\n");
+        HAL_Delay(1000);
+    }
 
     /* Initialize interrupts */
     hw_NVIC_Init();
 
     // Initialize display and clear all digits
     disp_init(DISP_I2C_ADDR);
+    disp_setBrightness(0);  // Lowest brightness
     disp_writeDigit_ascii(0, ' ', false);
     disp_writeDigit_ascii(1, 'H', false);
     disp_writeDigit_ascii(2, 'I', false);
@@ -122,22 +143,22 @@ int main(void)
     therm_init();
 
     //  Main infinite loop
-    print_string("Entering Main\r\n");
+    print_string("Entering Main\n");
     therm_startReading_single();
     while (1) {
         switch (mode) {
             case kIdleMode:
-                print_string("kIdleMode\r\n");
+                print_string("kIdleMode\n");
                 idleMode();
                 break;
 
             case kActiveMode:
-                print_string("kActiveMode\r\n");
+                print_string("kActiveMode\n");
                 activeMode();
                 break;
 
             case kInsaneTempMode:
-                print_string("kInsaneTempMode\r\n");
+                print_string("kInsaneTempMode\n");
                 // Write the reason for the error
                 errMode("TEMP");
                 if ( therm_valueReady() ) {
@@ -151,7 +172,7 @@ int main(void)
                 break;
 
             case kInvalidMainMode:
-                print_string("kInvalidMainMode\r\n");
+                print_string("kInvalidMainMode\n");
                 // Write the reason for the error
                 errMode("MAIN");
                 break;
@@ -173,7 +194,7 @@ void activeMode(void)
     if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
         temperature = therm_getValue_averaged();
 
-        // sprintf((char *)str_buff, "active temp: %f\r\n", temperature);
+        // sprintf((char *)str_buff, "active temp: %f\n", temperature);
         // print_string((char *)str_buff);
 
         if (temperature < ACTIVE_TEMP_THRESHOLD) {
@@ -219,8 +240,9 @@ void idleMode(void)
             therm_startReading_single();  // Single thermocouple conversion
         } else {
             time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
-            // TODO: switch to STANDBY for more power savings
-            sleep_enterSleep();
+            // Configure the RTC to wake us up in N miliseconds from standby
+            hw_RTC_setWakeup(IDLE_SAMPLE_TIME_MS);
+            sleep_enterStop();
             // Start a single thermocouple read after we wake back up
             therm_startReading_single();
         }
@@ -238,12 +260,12 @@ void idleMode(void)
             disp_writeDigit_ascii(3, ' ', false);  // Turn off the blink
             disp_writeDisplay();
             blink_on = false;
-            time_for_blink = HAL_GetTick() + 30000;  // 30 seconds between blinks
+            time_for_blink = HAL_GetTick() + IDLE_BLINK_PERIOD_MS;  // 30 seconds between blinks
         } else {
             disp_writeDigit_ascii(3, ' ', true);  // Turn on the blink
             disp_writeDisplay();
             blink_on = true;
-            time_for_blink = HAL_GetTick() + 500;  // 500 ms blink duration
+            time_for_blink = HAL_GetTick() + IDLE_BLINK_DURATION_MS;  // 500 ms blink duration
         }
     }
 }
@@ -275,7 +297,7 @@ void errMode(char * err_reason)
         disp_writeDisplay();
         time_for_err_display = HAL_GetTick() + 1000;
     }
-    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+    sleep_enterSleep();
 }
 
 
@@ -285,9 +307,11 @@ void sleep_enterSleep(void)
 }
 
 
-void sleep_enterIdle(void)
+void sleep_enterStop(void)
 {
-    HAL_PWR_EnterSTANDBYMode();
+    // TODO: Confirm if the RTC is generating an EXTI interrupt or an event.
+    //   I think I'm configuring it for an event, but it's ambiguous
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFE);
 }
 
 
@@ -392,7 +416,7 @@ void blinkLED_withDelay(uint32_t delay) {
  */
 void _Error_Handler_withRetval(char * file, int line, int retval)
 {
-    sprintf((char *)str_buff, "%s:%i  ->  %i\r\n", file, line, retval);
+    sprintf((char *)str_buff, "%s:%i  ->  %i\n", file, line, retval);
     int cycle = 0;
     typedef enum { kSave, kOur, kSouls, kPause} eSOS;
     eSOS sos_state = kSave;
@@ -413,7 +437,7 @@ void _Error_Handler_withRetval(char * file, int line, int retval)
                     sos_state = kSouls;
                     cycle = 0;
                 }
-                blinkLED_withDelay(SOS_S);
+                blinkLED_withDelay(SOS_O);
                 break;
 
             case kSouls:
@@ -425,14 +449,15 @@ void _Error_Handler_withRetval(char * file, int line, int retval)
                 break;
 
             case kPause:
-                blocking_delay(SOS_O * 2);
+                hw_LED_setValue(0);
+                blocking_delay(SOS_O * 3);
                 cycle = 0;
                 sos_state = kSave;
                 break;
         }
 
         // Print the error once a "cycle"
-        if (cycle == 2) {
+        if (sos_state == kPause) {
             print_string(str_buff);
         }
     }

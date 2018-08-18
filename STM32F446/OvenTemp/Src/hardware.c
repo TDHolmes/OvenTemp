@@ -89,6 +89,7 @@ void hw_NVIC_Init(void)
     /* DMA2_Stream0_IRQn interrupt configuration */
     HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 1, 1);
     HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+    // TODO: RTC interrupts?
 }
 
 /* ADC1 init function */
@@ -156,59 +157,62 @@ void hw_I2C3_Init(void)
 /* RTC init function */
 void hw_RTC_Init(void)
 {
+    RTC_TimeTypeDef sTime;
+    RTC_DateTypeDef sDate;
+    HAL_StatusTypeDef ret;
 
-  RTC_TimeTypeDef sTime;
-  RTC_DateTypeDef sDate;
+    hrtc.Instance = RTC;
+    hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+    hrtc.Init.AsynchPrediv = 127;
+    hrtc.Init.SynchPrediv = 255;
+    hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;  // RTC_OUTPUT_WAKEUP;
+    hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+    hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
 
-    /**Initialize RTC Only
-    */
-  hrtc.Instance = RTC;
-  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-  hrtc.Init.AsynchPrediv = 127;
-  hrtc.Init.SynchPrediv = 255;
-  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
-  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-  HAL_StatusTypeDef ret = HAL_RTC_Init(&hrtc);
-  if (ret != HAL_OK)
-  {
-    Error_Handler_withRetval(ret);
-  }
-
-    /**Initialize RTC and set the Time and Date
-    */
-  if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != 0x32F2) {
-      sTime.Hours = 0x0;
-      sTime.Minutes = 0x0;
-      sTime.Seconds = 0x0;
-      sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-      sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-      ret = HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
-      if (ret != HAL_OK)
-      {
+    ret = HAL_RTC_Init(&hrtc);
+    if (ret != HAL_OK) {
         Error_Handler_withRetval(ret);
-      }
+    }
 
-      sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-      sDate.Month = RTC_MONTH_JANUARY;
-      sDate.Date = 0x1;
-      sDate.Year = 0x0;
+    /* Initialize RTC and set the Time and Date */
+    // TODO: Figure out magic value garbage
+    if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != 0x32F2) {
+        sTime.Hours = 0x0;
+        sTime.Minutes = 0x0;
+        sTime.Seconds = 0x0;
+        sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+        sTime.StoreOperation = RTC_STOREOPERATION_RESET;
 
-      ret = HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
-      if (ret != HAL_OK)
-      {
-        Error_Handler_withRetval(ret);
-      }
+        ret = HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
+        if (ret != HAL_OK) {
+            Error_Handler_withRetval(ret);
+        }
 
-    HAL_RTCEx_BKUPWrite(&hrtc,RTC_BKP_DR0,0x32F2);
-  }
-    /**Enable the WakeUp
-    */
-  // if (HAL_RTCEx_SetWakeUpTimer(&hrtc, 60, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
-  // {
-  //   _Error_Handler(__FILE__, __LINE__);
-  // }
+        sDate.WeekDay = RTC_WEEKDAY_MONDAY;
+        sDate.Month = RTC_MONTH_JANUARY;
+        sDate.Date = 0x1;
+        sDate.Year = 0x0;
+
+        ret = HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
+        if (ret != HAL_OK) {
+            Error_Handler_withRetval(ret);
+        }
+
+        HAL_RTCEx_BKUPWrite(&hrtc,RTC_BKP_DR0,0x32F2);
+    }
 }
+
+
+void hw_RTC_setWakeup(uint32_t timeToWake_ms)
+{
+    HAL_StatusTypeDef ret;
+    // 32,768 ticks/sec (2^15) / 16 (our divider) = 2048 ticks/sec
+    ret = HAL_RTCEx_SetWakeUpTimer(&hrtc, timeToWake_ms * 2, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+    if (ret != HAL_OK) {
+        Error_Handler_withRetval(ret);
+    }
+}
+
 
 /* UART4 init function */
 void hw_UART4_Init(void)
@@ -256,6 +260,15 @@ void hw_GPIO_Init(void)
     // PA5 is LD2 LED, PA7 and PA2 are timing pins
     GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_5 | GPIO_PIN_7;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    // GPIO_InitStruct.Alternate = 0;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    // PC13/PC14 are RTC input pins
+    // TODO: finish plz
+    GPIO_InitStruct.Pin = GPIO_PIN_13 | GPIO_PIN_14;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     // GPIO_InitStruct.Alternate = 0;
