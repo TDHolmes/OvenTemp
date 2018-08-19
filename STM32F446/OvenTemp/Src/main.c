@@ -44,6 +44,11 @@ UART_HandleTypeDef huart4;    //!< HAL handle for UART4 for debug prints
 
 extern __IO uint32_t uwTick;  //!< HAL tick count
 
+typedef enum {
+    kErrWriteReason,
+    kErrWriteErr
+} err_mode_state_t;
+
 
 //! Different modes the main loop can be in based on the oven temperature.
 typedef enum {
@@ -92,9 +97,9 @@ int main(void)
     /* Initialize all configured peripherals */
     hw_GPIO_Init();
 
-    #ifdef DEBUG
-        hw_UART4_Init();
-    #endif
+#ifdef DEBUG
+    hw_UART4_Init();
+#endif
 
     hw_ADC1_Init();
     hw_I2C3_Init();
@@ -249,11 +254,6 @@ void idleMode(void)
 }
 
 
-typedef enum {
-    kErrWriteReason,
-    kErrWriteErr
-} err_mode_state_t;
-
 void errMode(char * err_reason)
 {
     static err_mode_state_t err_mode = kErrWriteReason;
@@ -335,10 +335,10 @@ void displayTemp(float temp, bool inFarenheit)
 
 void HAL_IncTick(void)
 {
+#ifdef DEBUG
+    // Handle the heartbeat LED
     static uint32_t HB_time = HB_TICK_TIME_MS;
     static bool HB_on = false;
-
-    // Handle the heartbeat LED
     if (uwTick >= HB_time) {
         if (HB_on == false) {
             hw_LED_setValue(1);
@@ -350,6 +350,7 @@ void HAL_IncTick(void)
             HB_on = false;
         }
     }
+#endif
 
     // Increment ms tick
     uwTick++;
