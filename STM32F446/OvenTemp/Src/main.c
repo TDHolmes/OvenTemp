@@ -17,6 +17,16 @@
 #include "thermocouple.h"
 #include "stm32f4xx_hal.h"
 
+#ifdef __APPLE__
+    #define SECTION(X) section("__DATA,__" X )
+    #define SECTION_START(X) __asm("section$start$__DATA$__" X)
+    #define SECTION_END(X) __asm("section$end$__DATA$__" X)
+#else
+    #define SECTION(X) section(X)
+    #define SECTION_START(X)
+    #define SECTION_END(X)
+#endif
+
 
 //! How long we sleep between readings in idle mode, in seconds.
 #define IDLE_MODE_SLEEPTIME    (60)
@@ -27,13 +37,16 @@
 #define ACTIVE_TEMP_THRESHOLD   (50.0f)
 #define INSANE_TEMP_THRESHOLD   (250.0f)
 
-#define IDLE_SAMPLE_TIME_MS    (2000)  // TODO: change to 60 seconds
+#define IDLE_SAMPLE_TIME_MS    (60000UL)  // TODO: change to 60 seconds
 #define ACTIVE_SAMPLE_TIME_MS  (1000)
+
+#define IDLE_BLINK_PERIOD_MS    (15000)
+#define IDLE_BLINK_DURATION_MS  (100)
 
 //! Toggle heartbeat LED every 30 seconds
 #define HB_TICK_TIME_MS (30000)
-//! heartbeet LED is on for 1 seconds
-#define HB_ON_TIME_MS   ( 1000)
+//! heartbeet LED is on for 0.1 seconds
+#define HB_ON_TIME_MS   (100)
 
 
 ADC_HandleTypeDef hadc1;      //!< HAL handle for ADC1
@@ -66,7 +79,8 @@ void blocking_delay(volatile uint32_t delay);
 void blinkLED_withDelay(uint32_t delay);
 void displayTemp(float temp, bool inFarenheit);
 void sleep_enterSleep(void);
-void sleep_enterIdle(void);
+void sleep_enterStop(int timeToSleep_s);
+static void SYSCLKConfig_STOP(void);
 
 // Modes
 void idleMode(void);
@@ -101,15 +115,18 @@ int main(void)
     hw_UART4_Init();
 #endif
 
+    print_string("Hello World!\n");
+
     hw_ADC1_Init();
     hw_I2C3_Init();
-    // hw_RTC_Init();
+    hw_RTC_Init();
 
     /* Initialize interrupts */
     hw_NVIC_Init();
 
     // Initialize display and clear all digits
     disp_init(DISP_I2C_ADDR);
+    disp_setBrightness(15);
     disp_writeDigit_ascii(0, ' ', false);
     disp_writeDigit_ascii(1, 'H', false);
     disp_writeDigit_ascii(2, 'I', false);
@@ -132,17 +149,17 @@ int main(void)
     while (1) {
         switch (mode) {
             case kIdleMode:
-                print_string("kIdleMode\n");
+                print_string("Main: in kIdleMode\n");
                 idleMode();
                 break;
 
             case kActiveMode:
-                print_string("kActiveMode\n");
+                print_string("Main: in kActiveMode\n");
                 activeMode();
                 break;
 
             case kInsaneTempMode:
-                print_string("kInsaneTempMode\n");
+                print_string("Main: in kInsaneTempMode\n");
                 // Write the reason for the error
                 errMode("TEMP");
                 if ( therm_valueReady() ) {
@@ -156,7 +173,7 @@ int main(void)
                 break;
 
             case kInvalidMainMode:
-                print_string("kInvalidMainMode\n");
+                print_string("Main: in kInvalidMainMode\n");
                 // Write the reason for the error
                 errMode("MAIN");
                 break;
@@ -175,28 +192,29 @@ void activeMode(void)
     float temperature = 0;
     static uint32_t time_for_reading = 0;
 
-    if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
-        temperature = therm_getValue_averaged();
+    if ( therm_valueReady() ) {
+        if (HAL_GetTick() >= time_for_reading) {
+            temperature = therm_getValue_averaged();
 
-        // sprintf((char *)str_buff, "active temp: %f\n", temperature);
-        // print_string((char *)str_buff);
-
-        if (temperature < ACTIVE_TEMP_THRESHOLD) {
-            disp_clear();
-            disp_writeDisplay();
-            mode = kIdleMode;
-            time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
-            therm_startReading_single();  // Single thermocouple conversion
-        } else if (temperature > INSANE_TEMP_THRESHOLD) {
-            mode = kInsaneTempMode;
+            if (temperature < ACTIVE_TEMP_THRESHOLD) {
+                disp_clear();
+                disp_writeDisplay();
+                mode = kIdleMode;
+                time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
+                therm_startReading_single();  // Single thermocouple conversion
+            } else if (temperature > INSANE_TEMP_THRESHOLD) {
+                mode = kInsaneTempMode;
+            } else {
+                // temperature at needed value. Display temp
+                time_for_reading = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
+                displayTemp(temperature, true);  // display temp in in farenheit
+                therm_startReading_single();  // Single thermocouple conversion
+                // deep sleep for a second to save power
+                // TODO: switch back to standby
+                sleep_enterSleep();
+            }
         } else {
-            // temperature at needed value. Display temp
-            time_for_reading = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
-            displayTemp(temperature, true);  // display temp in in farenheit
-            therm_startReading_single();  // Single thermocouple conversion
-            // deep sleep for a second to save power
-            // TODO: switch back to standby
-            sleep_enterSleep();
+            HAL_Delay(500);
         }
     } else if ( !therm_ADCRunning() ) {
         // If we're not running temp readings, do that!
@@ -211,46 +229,49 @@ void activeMode(void)
 void idleMode(void)
 {
     float temperature;
-    static uint32_t time_for_reading = 0;
     static uint32_t time_for_blink = 0;
     static bool blink_on = false;
 
-    if ( therm_valueReady() && HAL_GetTick() >= time_for_reading ) {
+    if ( therm_valueReady() ) {
+        print_string("Therm value ready. Check it out.\n");
         temperature = therm_getValue_single();
 
         if ( temperature >= ACTIVE_TEMP_THRESHOLD ) {
-            time_for_reading = HAL_GetTick() + ACTIVE_SAMPLE_TIME_MS;
             mode = kActiveMode;
             therm_startReading_single();  // Single thermocouple conversion
         } else {
-            time_for_reading = HAL_GetTick() + IDLE_SAMPLE_TIME_MS;
-            // TODO: switch to STANDBY for more power savings
-            sleep_enterSleep();
+            // Configure the RTC to wake us up in N miliseconds from standby
+            hw_RTC_setWakeup(IDLE_SAMPLE_TIME_MS);
+            sleep_enterStop(IDLE_SAMPLE_TIME_MS / 1000);  // This divide should be optimized out by compiler
             // Start a single thermocouple read after we wake back up
             therm_startReading_single();
         }
     } else if ( !therm_ADCRunning() ) {
         // If we're not running temp readings, do that!
+        print_string("Starting therm sample...\n");
         therm_startReading_single();
     } else {
         // Not done yet... Keep snoozin! ADC interrupt should wake us from SLEEP
+        print_string("Sleep and wait for ADC...\n");
         sleep_enterSleep();
     }
 
-    // Check up on the blinker
-    if ( HAL_GetTick() >= time_for_blink ) {
-        if ( blink_on == true ) {
-            disp_writeDigit_ascii(3, ' ', false);  // Turn off the blink
-            disp_writeDisplay();
-            blink_on = false;
-            time_for_blink = HAL_GetTick() + 30000;  // 30 seconds between blinks
-        } else {
-            disp_writeDigit_ascii(3, ' ', true);  // Turn on the blink
-            disp_writeDisplay();
-            blink_on = true;
-            time_for_blink = HAL_GetTick() + 500;  // 500 ms blink duration
-        }
-    }
+    disp_writeDigit_ascii(3, ' ', true);  // Turn on the blink
+    disp_writeDisplay();
+    // // Check up on the blinker
+    // if ( HAL_GetTick() >= time_for_blink ) {
+    //     if ( blink_on == true ) {
+    //         disp_writeDigit_ascii(3, ' ', false);  // Turn off the blink
+    //         disp_writeDisplay();
+    //         blink_on = false;
+    //         time_for_blink = HAL_GetTick() + IDLE_BLINK_PERIOD_MS;
+    //     } else {
+    //         disp_writeDigit_ascii(3, ' ', true);  // Turn on the blink
+    //         disp_writeDisplay();
+    //         blink_on = true;
+    //         time_for_blink = HAL_GetTick() + IDLE_BLINK_DURATION_MS;
+    //     }
+    // }
 }
 
 
@@ -275,19 +296,106 @@ void errMode(char * err_reason)
         disp_writeDisplay();
         time_for_err_display = HAL_GetTick() + 1000;
     }
-    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+    sleep_enterSleep();
 }
 
 
 void sleep_enterSleep(void)
 {
+    print_string("Entering sleep...\n");
     HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+    print_string("Exiting sleep!\n");
 }
 
 
-void sleep_enterIdle(void)
+void sleep_enterStop(int timeToSleep_s)
 {
-    HAL_PWR_EnterSTANDBYMode();
+    GPIO_InitTypeDef GPIO_InitStruct;
+
+    print_string("Entering STOP...\n");
+    HAL_Delay(250);
+    // Clear LEDs and display
+    hw_LED_setValue(0);
+    for (int i=0; i<4; i++) {
+        disp_writeDigit_ascii(i, ' ', false);
+    }
+    disp_writeDisplay();
+
+    /* Disable USB Clock */
+    __HAL_RCC_USB_OTG_FS_CLK_DISABLE();
+
+    /* Configure all GPIO as analog to reduce current consumption on non used IOs */
+    /* Enable GPIOs clock */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+    __HAL_RCC_GPIOF_CLK_ENABLE();
+    __HAL_RCC_GPIOG_CLK_ENABLE();
+    __HAL_RCC_GPIOH_CLK_ENABLE();
+
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Pin = GPIO_PIN_All;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+    HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+    HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+    HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
+
+    /* Disable GPIOs clock */
+    __HAL_RCC_GPIOA_CLK_DISABLE();
+    __HAL_RCC_GPIOB_CLK_DISABLE();
+    __HAL_RCC_GPIOC_CLK_DISABLE();
+    __HAL_RCC_GPIOD_CLK_DISABLE();
+    __HAL_RCC_GPIOE_CLK_DISABLE();
+    __HAL_RCC_GPIOF_CLK_DISABLE();
+    __HAL_RCC_GPIOG_CLK_DISABLE();
+    __HAL_RCC_GPIOH_CLK_DISABLE();
+
+    /*## Configure the Wake up timer ###########################################*/
+    /*  RTC Wakeup Interrupt Generation:
+        Wakeup Time Base = (RTC_WAKEUPCLOCK_RTCCLK_DIV /(LSI))
+        Wakeup Time = Wakeup Time Base * WakeUpCounter
+            = (RTC_WAKEUPCLOCK_RTCCLK_DIV /(LSI)) * WakeUpCounter
+                ==> WakeUpCounter = Wakeup Time / Wakeup Time Base
+
+        To configure the wake up timer to 1s the WakeUpCounter is set to 0x0801:
+        RTC_WAKEUPCLOCK_RTCCLK_DIV = RTCCLK_Div16 = 16
+        Wakeup Time Base = 16 /(~32.768KHz) = ~0.488 ms
+        Wakeup Time = ~1s = 0.488ms  * WakeUpCounter
+            ==> WakeUpCounter = ~1s/0.488ms = 2049 = 0x0801 */
+
+    /* Disable Wake-up timer */
+    HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+
+    /* Enable Wake-up timer */
+    HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0x0801 * timeToSleep_s, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+
+    /* FLASH Deep Power Down Mode enabled */
+    HAL_PWREx_EnableFlashPowerDown();
+
+    /*## Enter Stop Mode #######################################################*/
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+
+
+    /* Configures system clock after wake-up from STOP: enable HSI, PLL and select
+       PLL as system clock source (HSI and PLL are disabled in STOP mode) */
+    SYSCLKConfig_STOP();
+    hw_GPIO_Init();
+
+    /* Disable Wake-up timer */
+    if(HAL_RTCEx_DeactivateWakeUpTimer(&hrtc) != HAL_OK) {
+        /* Initialization Error */
+        Error_Handler();
+    }
+
+    print_string("Exiting STOP!\n");
 }
 
 
@@ -330,30 +438,6 @@ void displayTemp(float temp, bool inFarenheit)
     disp_writeDigit_value(3, d, false);
 
     disp_writeDisplay();
-}
-
-
-void HAL_IncTick(void)
-{
-#ifdef DEBUG
-    // Handle the heartbeat LED
-    static uint32_t HB_time = HB_TICK_TIME_MS;
-    static bool HB_on = false;
-    if (uwTick >= HB_time) {
-        if (HB_on == false) {
-            hw_LED_setValue(1);
-            HB_time = uwTick + HB_ON_TIME_MS;
-            HB_on = true;
-        } else {
-            hw_LED_setValue(0);
-            HB_time = uwTick + HB_TICK_TIME_MS;
-            HB_on = false;
-        }
-    }
-#endif
-
-    // Increment ms tick
-    uwTick++;
 }
 
 
@@ -434,7 +518,7 @@ void _Error_Handler_withRetval(char * file, int line, int retval)
         }
 
         // Print the error once a "cycle"
-        if (cycle == 2) {
+        if (sos_state == kPause) {
             print_string(str_buff);
         }
     }
@@ -456,6 +540,59 @@ void _Error_Handler_withRetval(char * file, int line, int retval)
  */
 inline void blocking_delay(volatile uint32_t delay) {
     for (; delay != 0; delay--);
+}
+
+
+/**
+  * @brief  Wake Up Timer callback
+  * @param  hrtc : hrtc handle
+  * @retval None
+  */
+void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
+{
+    // TODO: finish.
+}
+
+
+
+/**
+  * @brief  Configures system clock after wake-up from STOP: enable HSI, PLL
+  *         and select PLL as system clock source.
+  * @param  None
+  * @retval None
+  */
+static void SYSCLKConfig_STOP(void)
+{
+    RCC_ClkInitTypeDef RCC_ClkInitStruct;
+    RCC_OscInitTypeDef RCC_OscInitStruct;
+    uint32_t pFLatency = 0;
+
+    /* Get the Oscillators configuration according to the internal RCC registers */
+    HAL_RCC_GetOscConfig(&RCC_OscInitStruct);
+
+    /* After wake-up from STOP reconfigure the system clock: Enable HSI and PLL */
+    RCC_OscInitStruct.OscillatorType       = RCC_OSCILLATORTYPE_HSI;
+    RCC_OscInitStruct.HSIState             = RCC_HSI_ON;
+    RCC_OscInitStruct.HSICalibrationValue  = (uint32_t)0x10;   /* Default HSI calibration trimming value */
+    RCC_OscInitStruct.PLL.PLLState         = RCC_PLL_NONE;
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+        /* Initialization Error */
+        Error_Handler();
+    }
+
+    /* Get the Clocks configuration according to the internal RCC registers */
+    HAL_RCC_GetClockConfig(&RCC_ClkInitStruct, &pFLatency);
+
+    /* Select PLL as system clock source and configure the HCLK, PCLK1 and PCLK2
+    clocks dividers */
+    RCC_ClkInitStruct.ClockType       = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
+    RCC_ClkInitStruct.SYSCLKSource    = RCC_SYSCLKSOURCE_HSI;
+    RCC_ClkInitStruct.AHBCLKDivider   = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider  = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB2CLKDivider  = RCC_HCLK_DIV1;
+    if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, pFLatency) != HAL_OK) {
+        Error_Handler();
+    }
 }
 
 

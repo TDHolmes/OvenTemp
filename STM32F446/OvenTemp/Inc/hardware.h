@@ -31,6 +31,7 @@ void hw_RTC_Init(void);
 void hw_UART4_Init(void);
 void hw_NVIC_Init(void);
 
+void hw_RTC_setWakeup(uint32_t timeToWake_ms);
 
 void hw_LED_setValue(uint8_t value);
 void hw_LED_toggle(void);
