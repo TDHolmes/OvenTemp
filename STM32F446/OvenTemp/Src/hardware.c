@@ -165,7 +165,7 @@ void hw_RTC_Init(void)
     hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
     hrtc.Init.AsynchPrediv = 127;
     hrtc.Init.SynchPrediv = 255;
-    hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;  // RTC_OUTPUT_WAKEUP;
+    hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
     hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
     hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
 
@@ -217,19 +217,17 @@ void hw_RTC_setWakeup(uint32_t timeToWake_ms)
 /* UART4 init function */
 void hw_UART4_Init(void)
 {
-
-  huart4.Instance = UART4;
-  huart4.Init.BaudRate = 115200;
-  huart4.Init.WordLength = UART_WORDLENGTH_8B;
-  huart4.Init.StopBits = UART_STOPBITS_1;
-  huart4.Init.Parity = UART_PARITY_NONE;
-  huart4.Init.Mode = UART_MODE_TX_RX;
-  huart4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart4.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart4) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
+    huart4.Instance = UART4;
+    huart4.Init.BaudRate = 115200;
+    huart4.Init.WordLength = UART_WORDLENGTH_8B;
+    huart4.Init.StopBits = UART_STOPBITS_1;
+    huart4.Init.Parity = UART_PARITY_NONE;
+    huart4.Init.Mode = UART_MODE_TX_RX;
+    huart4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+    huart4.Init.OverSampling = UART_OVERSAMPLING_16;
+    if (HAL_UART_Init(&huart4) != HAL_OK) {
+        _Error_Handler(__FILE__, __LINE__);
+    }
 }
 
 /**
@@ -254,7 +252,6 @@ void hw_GPIO_Init(void)
 
     /* GPIO Ports Clock Enable */
     __HAL_RCC_GPIOA_CLK_ENABLE();
-    // __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
 
     // PA5 is LD2 LED, PA7 and PA2 are timing pins
@@ -265,13 +262,48 @@ void hw_GPIO_Init(void)
     // GPIO_InitStruct.Alternate = 0;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+    /**ADC1 GPIO Configuration
+    PA4   ------> ADC1_IN4
+    PA6   ------> ADC1_IN6
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_6;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
     // PC13/PC14 are RTC input pins
-    // TODO: finish plz
     GPIO_InitStruct.Pin = GPIO_PIN_13 | GPIO_PIN_14;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     // GPIO_InitStruct.Alternate = 0;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /**I2C3 GPIO Configuration
+    PA8   ------> I2C3_SCL
+    PC9   ------> I2C3_SDA
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_8;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF4_I2C3;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    // Now SDA
+    GPIO_InitStruct.Pin = GPIO_PIN_9;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+
+    /**UART4 GPIO Configuration
+    PA0-WKUP ------> UART4_TX
+    PA1      ------> UART4_RX
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF8_UART4;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }
 
